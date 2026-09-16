@@ -1,0 +1,96 @@
+{{- with .Values.deployments.keycloak }}
+---
+
+# Keycloak StatefulSet
+#
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: keycloak
+spec:
+  serviceName: keycloak
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: keycloak
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: keycloak
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/release: {{ $.Release.Name }}
+    spec:
+      containers:
+        - name: keycloak
+          image: {{ .imagePrefix }}{{ .image }}:{{ .version }}
+          imagePullPolicy: {{ .pullPolicy }}
+          args: [ "start", "--features=oid4vc-vci" ]
+          env:
+            # Admin bootstrap
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom: { secretKeyRef: { name: keycloak-secret, key: ADMIN_USERNAME }}
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom: { secretKeyRef: { name: keycloak-secret, key: ADMIN_PASSWORD }}
+
+            # Database config
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL_HOST
+              value: postgres
+            - name: KC_DB_URL_DATABASE
+              value: keycloak
+            - name: KC_DB_USERNAME
+              value: postgres
+            - name: KC_DB_PASSWORD
+              valueFrom: { secretKeyRef: { name: postgres-secret, key: POSTGRES_PASSWORD }}
+
+            # Enable Health/Metrics
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_METRICS_ENABLED
+              value: "true"
+
+            # Log levels
+            - name: KC_LOG_LEVEL
+              value: INFO,org.keycloak.protocol.oid4vc:DEBUG,org.keycloak.services:DEBUG
+
+            # HTTP access (no TLS termination in-cluster)
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            initialDelaySeconds: 40     # wait 40s before first probe
+            periodSeconds: 10           # check every 10s
+            failureThreshold: 60        # allow failures (→ 10m grace period)
+            timeoutSeconds: 5           # each probe times out after 5s
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9000
+            initialDelaySeconds: 30     # wait 40s before first probe
+            periodSeconds: 10           # check every 10s
+            failureThreshold: 30        # allow failures (→ 5m grace period)
+            timeoutSeconds: 5           # each probe times out after 5s
+---
+
+# Keycloak Service
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+spec:
+  type: NodePort
+  ports:
+    - port: 8080
+      nodePort: {{ .nodePort }}
+  selector:
+    app.kubernetes.io/name: keycloak
+---
+{{- end }}

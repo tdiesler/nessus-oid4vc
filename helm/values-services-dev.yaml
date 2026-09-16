@@ -1,0 +1,21 @@
+#
+# helm upgrade --kube-context=rancher-desktop --install nessus-services ./helm -f ./helm/values-services-dev.yaml
+#
+environment: dev
+
+deployments:
+
+  # SQL Service
+  #
+  postgres:
+    version: 17.4
+    nodePort: 30543
+
+  # Keycloak Service
+  #
+  keycloak:
+    imagePrefix: "quay.io/keycloak/"
+    image: "keycloak"
+    version: 26.7
+    nodePort: 30800
+    pullPolicy: IfNotPresent
