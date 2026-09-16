@@ -16,6 +16,7 @@ deployments:
   keycloak:
     imagePrefix: "quay.io/keycloak/"
     image: "keycloak"
-    version: 26.7
+    # Server image version — independent of admin-client version in pom.xml
+    version: 26.7.4
     nodePort: 30800
     pullPolicy: IfNotPresent

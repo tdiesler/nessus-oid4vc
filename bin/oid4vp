@@ -1,0 +1,3 @@
+#!/bin/bash
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+exec jbang "$SCRIPT_DIR/../cli/src/main/java/io/nessus/oid4vp/cli/oid4vp.java" "$@"

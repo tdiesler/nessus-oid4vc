@@ -23,6 +23,7 @@
 
 ### Git and commits
 
+- Do not fetch, pull, or push unsolicited. Run these only when explicitly asked.
 - Create commits only when explicitly requested. Use the configured user as the
   author and add a trailer in the exact form
   `Co-Authored-By: Claude <model id> <noreply@anthropic.com>`
