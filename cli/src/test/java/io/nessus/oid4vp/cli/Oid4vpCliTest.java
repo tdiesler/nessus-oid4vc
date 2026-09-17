@@ -77,11 +77,11 @@ class Oid4vpCliTest {
         assumeTrue(walletExists, "No wallet session — run 'oid4vp login' first");
         assumeTrue(keycloakAvailable, "Keycloak not reachable");
 
-        var create = cli("realm", "create", "cli-test-realm", "--display-name", "CLI Test");
+        var create = cli("realm", "create", "oid4vci-test", "--display-name", "CLI Test");
         assertEquals(0, create.exitCode(), create.stderr());
         assertTrue(create.stdout().contains("Created realm"), create.stdout());
 
-        var delete = cli("realm", "delete", "cli-test-realm");
+        var delete = cli("realm", "delete", "oid4vci-test");
         assertEquals(0, delete.exitCode(), delete.stderr());
         assertTrue(delete.stdout().contains("Deleted realm"), delete.stdout());
     }

@@ -13,6 +13,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
+import org.keycloak.common.util.MultivaluedHashMap;
+import org.keycloak.representations.idm.ComponentRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
@@ -32,6 +34,7 @@ import java.util.concurrent.Callable;
 @Command(name = "oid4vp", mixinStandardHelpOptions = true,
     subcommands = {
         oid4vp.Login.class,
+        oid4vp.Key.class,
         oid4vp.Realm.class
     })
 public class oid4vp implements Runnable {
@@ -52,6 +55,27 @@ public class oid4vp implements Runnable {
         CommandLine.usage(this, System.out);
     }
 
+    static Keycloak adminClient() {
+        var wallet = loadWallet();
+        var conn = wallet.connection;
+
+        if (Instant.parse(conn.expiresAt).minusSeconds(30).isBefore(Instant.now())) {
+            try {
+                refreshAccessToken(conn);
+                saveWallet(wallet);
+            } catch (Exception ex) {
+                throw new RuntimeException(ex.getMessage(), ex);
+            }
+        }
+
+        return KeycloakBuilder.builder()
+            .serverUrl(conn.serverUrl)
+            .realm("master")
+            .clientId("admin-cli")
+            .authorization("Bearer " + conn.accessToken)
+            .build();
+    }
+
     static WalletState loadWallet() {
         if (!Files.exists(WALLET_FILE)) {
             throw new IllegalStateException("Not logged in. Run 'oid4vp login' first.");
@@ -61,6 +85,15 @@ public class oid4vp implements Runnable {
         } catch (Exception ex) {
             throw new RuntimeException("Failed to read wallet: " + ex.getMessage(), ex);
         }
+    }
+
+    static String resolveRealm(String realmOption) {
+        if (realmOption != null) return realmOption;
+        var wallet = loadWallet();
+        if (wallet.defaultRealm == null) {
+            throw new IllegalStateException("No realm specified and no default realm set. Use --realm or 'oid4vp realm use <name>'.");
+        }
+        return wallet.defaultRealm;
     }
 
     static void saveWallet(WalletState state) {
@@ -95,25 +128,75 @@ public class oid4vp implements Runnable {
         return conn.accessToken;
     }
 
-    static Keycloak adminClient() {
-        var wallet = loadWallet();
-        var conn = wallet.connection;
+    @Command(name = "key", mixinStandardHelpOptions = true, description = "Manage keys",
+        subcommands = { oid4vp.Key.Create.class })
+    static class Key implements Runnable {
 
-        if (Instant.parse(conn.expiresAt).minusSeconds(30).isBefore(Instant.now())) {
-            try {
-                refreshAccessToken(conn);
-                saveWallet(wallet);
-            } catch (Exception ex) {
-                throw new RuntimeException(ex.getMessage(), ex);
-            }
+        @Override
+        public void run() {
+            CommandLine.usage(this, System.out);
         }
 
-        return KeycloakBuilder.builder()
-            .serverUrl(conn.serverUrl)
-            .realm("master")
-            .clientId("admin-cli")
-            .authorization("Bearer " + conn.accessToken)
-            .build();
+        @Command(name = "create", description = "Create a key for a realm")
+        static class Create implements Callable<Integer> {
+
+            @Option(names = "--algo", required = true, description = "Key algorithm (ES256, ECDH-ES)")
+            String algo;
+
+            @Option(names = "--name", description = "Key name (derived from algorithm if not given)")
+            String name;
+
+            @Option(names = "--priority", defaultValue = "100", description = "Key priority (default: 100)")
+            String priority;
+
+            @Option(names = "--realm", description = "Realm name (defaults to current realm)")
+            String realm;
+
+            @Override
+            public Integer call() {
+                var realmName = resolveRealm(realm);
+                try (var kc = adminClient()) {
+                    var realmId = kc.realm(realmName).toRepresentation().getId();
+
+                    var comp = new ComponentRepresentation();
+                    comp.setProviderType("org.keycloak.keys.KeyProvider");
+                    comp.setParentId(realmId);
+                    var config = new MultivaluedHashMap<String, String>();
+                    config.putSingle("priority", priority);
+                    config.putSingle("active", "true");
+                    config.putSingle("enabled", "true");
+
+                    switch (algo) {
+                        case "ES256" -> {
+                            comp.setName(name != null ? name : "es256-vc-signing");
+                            comp.setProviderId("ecdsa-generated");
+                            config.putSingle("ecdsaEllipticCurveKey", "P-256");
+                        }
+                        case "ECDH-ES" -> {
+                            comp.setName(name != null ? name : "ecdh-vc-encryption");
+                            comp.setProviderId("ecdh-generated");
+                            config.putSingle("ecdhAlgorithm", "ECDH-ES");
+                        }
+                        default -> {
+                            System.err.println("Unsupported algorithm: " + algo);
+                            return 1;
+                        }
+                    }
+
+                    comp.setConfig(config);
+
+                    try (var response = kc.realm(realmName).components().add(comp)) {
+                        var location = response.getLocation();
+                        var id = location != null ? location.getPath().replaceAll(".*/", "") : "unknown";
+                        System.out.println("Created " + algo + " key: " + id);
+                    }
+                    return 0;
+                } catch (Exception ex) {
+                    System.err.println("Failed: " + ex.getMessage());
+                    return 1;
+                }
+            }
+        }
     }
 
     @Command(name = "login", description = "Authenticate with Keycloak")
@@ -177,7 +260,7 @@ public class oid4vp implements Runnable {
     }
 
     @Command(name = "realm", mixinStandardHelpOptions = true, description = "Manage realms",
-        subcommands = { oid4vp.Realm.Create.class, oid4vp.Realm.Delete.class })
+        subcommands = { oid4vp.Realm.Create.class, oid4vp.Realm.Delete.class, oid4vp.Realm.Use.class })
     static class Realm implements Runnable {
 
         @Override
@@ -204,7 +287,12 @@ public class oid4vp implements Runnable {
                     rep.setVerifiableCredentialsEnabled(true);
                     kc.realms().create(rep);
 
+                    var wallet = loadWallet();
+                    wallet.defaultRealm = realm;
+                    saveWallet(wallet);
+
                     System.out.println("Created realm: " + realm);
+                    System.out.println("Default realm set to: " + realm);
                     return 0;
                 } catch (Exception ex) {
                     System.err.println("Failed: " + ex.getMessage());
@@ -224,6 +312,12 @@ public class oid4vp implements Runnable {
                 try (var kc = adminClient()) {
                     kc.realm(realm).remove();
 
+                    var wallet = loadWallet();
+                    if (realm.equals(wallet.defaultRealm)) {
+                        wallet.defaultRealm = null;
+                        saveWallet(wallet);
+                    }
+
                     System.out.println("Deleted realm: " + realm);
                     return 0;
                 } catch (Exception ex) {
@@ -232,11 +326,28 @@ public class oid4vp implements Runnable {
                 }
             }
         }
+
+        @Command(name = "use", description = "Set the default realm")
+        static class Use implements Callable<Integer> {
+
+            @CommandLine.Parameters(index = "0", description = "Realm name")
+            String realm;
+
+            @Override
+            public Integer call() {
+                var wallet = loadWallet();
+                wallet.defaultRealm = realm;
+                saveWallet(wallet);
+                System.out.println("Default realm set to: " + realm);
+                return 0;
+            }
+        }
     }
 }
 
 class WalletState {
     public WalletState.Connection connection;
+    public String defaultRealm;
 
     static class Connection {
         public String serverUrl;

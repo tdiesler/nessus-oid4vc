@@ -1,0 +1,16 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+OID4VP="${SCRIPT_DIR}/oid4vp"
+
+REALM="${1:-oid4vci}"
+
+${OID4VP} realm delete "${REALM}" 2>/dev/null || true
+${OID4VP} realm create "${REALM}"
+${OID4VP} key create --algo ES256 --priority 120
+${OID4VP} key create --algo ECDH-ES --priority 130
+
+echo
+echo "Realm setup complete: ${REALM}"
