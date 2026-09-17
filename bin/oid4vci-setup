@@ -11,6 +11,8 @@ ${OID4VP} realm delete "${REALM}" 2>/dev/null || true
 ${OID4VP} realm create "${REALM}"
 ${OID4VP} key create --algo ES256 --priority 120
 ${OID4VP} key create --algo ECDH-ES --priority 130
+${OID4VP} user create max --first-name Max --last-name Mustermann --email user@email.com --password password --role issuer
+${OID4VP} user create alice --first-name Alice --last-name Wonderland --email alice@email.com --password password
 
 echo
 echo "Realm setup complete: ${REALM}"

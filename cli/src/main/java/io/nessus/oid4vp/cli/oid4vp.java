@@ -15,7 +15,10 @@ import org.keycloak.admin.client.Keycloak;
 import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.representations.idm.ComponentRepresentation;
+import org.keycloak.representations.idm.CredentialRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
+import org.keycloak.representations.idm.UserRepresentation;
+import jakarta.ws.rs.WebApplicationException;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -29,13 +32,15 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.List;
 import java.util.concurrent.Callable;
 
 @Command(name = "oid4vp", mixinStandardHelpOptions = true,
     subcommands = {
         oid4vp.Login.class,
         oid4vp.Key.class,
-        oid4vp.Realm.class
+        oid4vp.Realm.class,
+        oid4vp.User.class
     })
 public class oid4vp implements Runnable {
 
@@ -103,6 +108,17 @@ public class oid4vp implements Runnable {
         } catch (Exception ex) {
             throw new RuntimeException("Failed to save wallet: " + ex.getMessage(), ex);
         }
+    }
+
+    static String formatError(String context, Exception ex) {
+        if (ex instanceof WebApplicationException wae) {
+            var response = wae.getResponse();
+            var status = response.getStatus();
+            var body = "";
+            try { body = response.readEntity(String.class); } catch (Exception ignored) {}
+            return context + ": HTTP " + status + (body.isEmpty() ? "" : " - " + body);
+        }
+        return context + ": " + ex.getMessage();
     }
 
     static String refreshAccessToken(WalletState.Connection conn) throws Exception {
@@ -192,7 +208,7 @@ public class oid4vp implements Runnable {
                     }
                     return 0;
                 } catch (Exception ex) {
-                    System.err.println("Failed: " + ex.getMessage());
+                    System.err.println(formatError("Failed to create " + algo + " key in realm '" + realmName + "'", ex));
                     return 1;
                 }
             }
@@ -295,7 +311,7 @@ public class oid4vp implements Runnable {
                     System.out.println("Default realm set to: " + realm);
                     return 0;
                 } catch (Exception ex) {
-                    System.err.println("Failed: " + ex.getMessage());
+                    System.err.println(formatError("Failed to create realm '" + realm + "'", ex));
                     return 1;
                 }
             }
@@ -321,7 +337,7 @@ public class oid4vp implements Runnable {
                     System.out.println("Deleted realm: " + realm);
                     return 0;
                 } catch (Exception ex) {
-                    System.err.println("Failed: " + ex.getMessage());
+                    System.err.println(formatError("Failed to delete realm '" + realm + "'", ex));
                     return 1;
                 }
             }
@@ -340,6 +356,87 @@ public class oid4vp implements Runnable {
                 saveWallet(wallet);
                 System.out.println("Default realm set to: " + realm);
                 return 0;
+            }
+        }
+    }
+
+    @Command(name = "user", mixinStandardHelpOptions = true, description = "Manage users",
+        subcommands = { oid4vp.User.Create.class })
+    static class User implements Runnable {
+
+        @Override
+        public void run() {
+            CommandLine.usage(this, System.out);
+        }
+
+        @Command(name = "create", description = "Create a user in a realm")
+        static class Create implements Callable<Integer> {
+
+            @CommandLine.Parameters(index = "0", description = "Username")
+            String username;
+
+            @Option(names = "--email", required = true, description = "User email")
+            String email;
+
+            @Option(names = "--first-name", required = true, description = "First name")
+            String firstName;
+
+            @Option(names = "--last-name", required = true, description = "Last name")
+            String lastName;
+
+            @Option(names = "--password", required = true, description = "User password")
+            String password;
+
+            @Option(names = "--realm", description = "Realm name (defaults to current realm)")
+            String realm;
+
+            @Option(names = "--role", description = "User role (e.g., issuer)")
+            String role;
+
+            @Override
+            public Integer call() {
+                var realmName = resolveRealm(realm);
+                try (var kc = adminClient()) {
+                    var userRep = new UserRepresentation();
+                    userRep.setUsername(username);
+                    userRep.setEmail(email);
+                    userRep.setFirstName(firstName);
+                    userRep.setLastName(lastName);
+                    userRep.setEmailVerified(true);
+                    userRep.setEnabled(true);
+
+                    var cred = new CredentialRepresentation();
+                    cred.setType(CredentialRepresentation.PASSWORD);
+                    cred.setValue(password);
+                    cred.setTemporary(false);
+                    userRep.setCredentials(List.of(cred));
+
+                    try (var response = kc.realm(realmName).users().create(userRep)) {
+                        if (response.getStatus() != 201) {
+                            System.err.println("Failed to create user: " + response.readEntity(String.class));
+                            return 1;
+                        }
+                        var location = response.getLocation();
+                        var userId = location != null ? location.getPath().replaceAll(".*/", "") : null;
+                        System.out.println("Created user: " + username + " (" + userId + ")");
+
+                        if ("issuer".equals(role) && userId != null) {
+                            var roleName = "credential-offer-create";
+                            try {
+                                var roleRep = kc.realm(realmName).roles().get(roleName).toRepresentation();
+                                kc.realm(realmName).users().get(userId).roles().realmLevel().add(List.of(roleRep));
+                                System.out.println("Assigned role: " + roleName);
+                            } catch (Exception rex) {
+                                System.err.println(formatError("Failed to assign role '" + roleName + "' to user '" + username + "'", rex));
+                                return 1;
+                            }
+                        }
+                    }
+                    return 0;
+                } catch (Exception ex) {
+                    System.err.println(formatError("Failed to create user '" + username + "' in realm '" + realmName + "'", ex));
+                    return 1;
+                }
             }
         }
     }

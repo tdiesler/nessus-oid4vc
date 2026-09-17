@@ -24,7 +24,7 @@ spec:
         - name: keycloak
           image: {{ .imagePrefix }}{{ .image }}:{{ .version }}
           imagePullPolicy: {{ .pullPolicy }}
-          args: [ "start", "--features=oid4vc-vci" ]
+          args: [ "start", "--features=oid4vc-vci,oid4vc-vci-rest-credential-offer,oid4vc-vci-preauth-code" ]
           env:
             # Admin bootstrap
             - name: KC_BOOTSTRAP_ADMIN_USERNAME
