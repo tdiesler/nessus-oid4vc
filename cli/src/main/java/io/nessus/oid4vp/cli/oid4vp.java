@@ -16,6 +16,7 @@ import org.keycloak.admin.client.KeycloakBuilder;
 import org.keycloak.common.util.MultivaluedHashMap;
 import org.keycloak.representations.idm.ComponentRepresentation;
 import org.keycloak.representations.idm.CredentialRepresentation;
+import org.keycloak.representations.idm.ClientRepresentation;
 import org.keycloak.representations.idm.RealmRepresentation;
 import org.keycloak.representations.idm.UserRepresentation;
 import jakarta.ws.rs.WebApplicationException;
@@ -32,11 +33,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Callable;
 
 @Command(name = "oid4vp", mixinStandardHelpOptions = true,
     subcommands = {
+        oid4vp.Client.class,
         oid4vp.Login.class,
         oid4vp.Key.class,
         oid4vp.Realm.class,
@@ -142,6 +146,61 @@ public class oid4vp implements Runnable {
         conn.refreshToken = json.get("refresh_token").asText();
         conn.expiresAt = Instant.now().plusSeconds(json.get("expires_in").asLong()).toString();
         return conn.accessToken;
+    }
+
+    @Command(name = "client", mixinStandardHelpOptions = true, description = "Manage clients",
+        subcommands = { oid4vp.Client.Create.class })
+    static class Client implements Runnable {
+
+        @Override
+        public void run() {
+            CommandLine.usage(this, System.out);
+        }
+
+        @Command(name = "create", description = "Create an OID4VCI Client")
+        static class Create implements Callable<Integer> {
+
+            @CommandLine.Parameters(index = "0", description = "Client ID")
+            String clientId;
+
+            @Option(names = "--realm", description = "Realm name (defaults to current realm)")
+            String realm;
+
+            @Override
+            public Integer call() {
+                var realmName = resolveRealm(realm);
+                try (var kc = adminClient()) {
+                    var clientRep = new ClientRepresentation();
+                    clientRep.setClientId(clientId);
+                    clientRep.setName("OID4VCI Client");
+                    clientRep.setEnabled(true);
+                    clientRep.setProtocol("openid-connect");
+                    clientRep.setPublicClient(true);
+                    clientRep.setDirectAccessGrantsEnabled(true);
+                    clientRep.setRedirectUris(List.of("urn:ietf:wg:oauth:2.0:oob"));
+                    clientRep.setDefaultClientScopes(List.of("basic", "profile"));
+                    clientRep.setOptionalClientScopes(List.of(
+                        "oid4vc_natural_person_sd",
+                        "oid4vc_natural_person_jwt"
+                    ));
+                    clientRep.setAttributes(Map.of("oid4vci.enabled", "true"));
+
+                    try (var response = kc.realm(realmName).clients().create(clientRep)) {
+                        if (response.getStatus() != 201) {
+                            System.err.println("Failed to create client: " + response.readEntity(String.class));
+                            return 1;
+                        }
+                        var location = response.getLocation();
+                        var id = location != null ? location.getPath().replaceAll(".*/", "") : "unknown";
+                        System.out.println("Created client: " + clientId + " (" + id + ")");
+                    }
+                    return 0;
+                } catch (Exception ex) {
+                    System.err.println(formatError("Failed to create client '" + clientId + "' in realm '" + realmName + "'", ex));
+                    return 1;
+                }
+            }
+        }
     }
 
     @Command(name = "key", mixinStandardHelpOptions = true, description = "Manage keys",
@@ -425,7 +484,7 @@ public class oid4vp implements Runnable {
                             try {
                                 var roleRep = kc.realm(realmName).roles().get(roleName).toRepresentation();
                                 kc.realm(realmName).users().get(userId).roles().realmLevel().add(List.of(roleRep));
-                                System.out.println("Assigned role: " + roleName);
+                                System.out.println("- Assigned role: " + roleName);
                             } catch (Exception rex) {
                                 System.err.println(formatError("Failed to assign role '" + roleName + "' to user '" + username + "'", rex));
                                 return 1;
