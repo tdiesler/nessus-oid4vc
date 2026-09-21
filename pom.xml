@@ -26,6 +26,8 @@
         <version.info.picocli>4.7.6</version.info.picocli>
         <version.org.junit>5.11.4</version.org.junit>
         <!-- Keep aligned with cli/src/.../oid4vp.java //DEPS (from github.com/keycloak/keycloak-client) -->
+        <version.com.microsoft.playwright>1.44.0</version.com.microsoft.playwright>
+        <version.com.nimbusds>9.37.3</version.com.nimbusds>
         <version.org.keycloak>26.0.12</version.org.keycloak>
         <version.org.slf4j>2.0.16</version.org.slf4j>
     </properties>
@@ -41,6 +43,16 @@
                 <groupId>info.picocli</groupId>
                 <artifactId>picocli</artifactId>
                 <version>${version.info.picocli}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.microsoft.playwright</groupId>
+                <artifactId>playwright</artifactId>
+                <version>${version.com.microsoft.playwright}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.nimbusds</groupId>
+                <artifactId>nimbus-jose-jwt</artifactId>
+                <version>${version.com.nimbusds}</version>
             </dependency>
             <dependency>
                 <groupId>org.keycloak</groupId>

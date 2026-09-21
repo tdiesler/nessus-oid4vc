@@ -5,7 +5,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OID4VP="${SCRIPT_DIR}/oid4vp"
 
-REALM="${1:-oid4vci}"
+VERBOSE=""
+REALM="oid4vci"
+for arg in "$@"; do
+  case "${arg}" in
+    --verbose) VERBOSE="--verbose" ;;
+    *) REALM="${arg}" ;;
+  esac
+done
 
 # The wallet stores three token-related values:
 #
@@ -17,10 +24,10 @@ REALM="${1:-oid4vci}"
 # using the refresh token to get a fresh access token — no password needed.
 #
 is_refresh_token_still_valid() {
-  local wallet_file="$HOME/.config/nessus-oid4vp/wallet.json"
+  local wallet_file=".config/wallet.json"
   [[ -f "${wallet_file}" ]] || return 1
   local refresh_token
-  refresh_token=$(python3 -c "import json; print(json.load(open('${wallet_file}'))['connection']['refreshToken'])" 2>/dev/null || true)
+  refresh_token=$(python3 -c "import json; print(json.load(open('${wallet_file}'))['realms']['master']['users']['admin']['refreshToken'])" 2>/dev/null || true)
   [[ -n "${refresh_token}" ]] || return 1
   local expires_epoch now_epoch
   expires_epoch=$(python3 -c "import json, base64; payload = '${refresh_token}'.split('.')[1]; payload += '=' * (4 - len(payload) % 4); print(json.loads(base64.urlsafe_b64decode(payload))['exp'])" 2>/dev/null || echo 0)
@@ -32,30 +39,39 @@ is_refresh_token_still_valid() {
 #
 if ! is_refresh_token_still_valid; then
   KC_ADMIN_PASSWORD="$(kubectl --context=rancher-desktop get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d)"
-  ${OID4VP} login --server http://localhost:30800 --password "${KC_ADMIN_PASSWORD}"
+  ${OID4VP} ${VERBOSE} login --server http://localhost:30800 --password "${KC_ADMIN_PASSWORD}"
 fi
 
 # Delete OID4VCI Realm
 #
-${OID4VP} realm delete "${REALM}" 2>/dev/null || true
+${OID4VP} ${VERBOSE} realm delete "${REALM}" 2>/dev/null || true
 
 # Create OID4VCI Realm
 #
-${OID4VP} realm create "${REALM}"
+${OID4VP} ${VERBOSE} realm create "${REALM}"
 
 # Create Realm Keys
 #
-${OID4VP} key create --algo ES256 --priority 120
-${OID4VP} key create --algo ECDH-ES --priority 130
+${OID4VP} ${VERBOSE} key create --realm "${REALM}" --algo ES256 --priority 120
+${OID4VP} ${VERBOSE} key create --realm "${REALM}" --algo ECDH-ES --priority 130
 
 # Create OID4VCI Client
 #
-${OID4VP} client create oid4vci-client
+${OID4VP} ${VERBOSE} client create oid4vci-client
 
 # Create Users
 #
-${OID4VP} user create max --first-name Max --last-name Mustermann --email user@email.com --password password --role issuer
-${OID4VP} user create alice --first-name Alice --last-name Wonderland --email alice@email.com --password password
+${OID4VP} ${VERBOSE} user create max --first-name Max --last-name Mustermann --email user@email.com --password password --role issuer
+${OID4VP} ${VERBOSE} user create alice --first-name Alice --last-name Wonderland --email alice@email.com --password password
+
+# Holder Login & Key
+#
+${OID4VP} ${VERBOSE} login --realm "${REALM}" --client-id oid4vci-client --user alice --password password --scope "oid4vc_natural_person_jwt"
+${OID4VP} ${VERBOSE} key create --user alice --algo ES256
+
+# Get Verifiable Credential
+#
+${OID4VP} ${VERBOSE} vc get --credential-id oid4vc_natural_person_jwt_0000
 
 echo
 echo "Realm setup complete: ${REALM}"
