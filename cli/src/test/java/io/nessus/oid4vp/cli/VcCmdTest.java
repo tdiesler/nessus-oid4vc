@@ -32,11 +32,15 @@ class VcCmdTest extends AbstractCmdTest {
         try {
             cli("key", "create", "--realm", realm, "--algo", "ES256", "--priority", "120");
             cli("key", "create", "--realm", realm, "--algo", "ECDH-ES", "--priority", "130");
-            cli("client", "create", "oid4vci-client", "--realm", realm);
+            cli("client", "create", "oid4vci-client", "--realm", realm,
+                "--vc-scope", "oid4vc_natural_person_sd",
+                "--vc-scope", "oid4vc_natural_person_jwt");
             cli("user", "create", "alice",
                 "--realm", realm,
                 "--first-name", "Alice", "--last-name", "Wonderland",
-                "--email", "alice@test.com", "--password", "password");
+                "--email", "alice@test.com", "--password", "password",
+                "--vc-scope", "oid4vc_natural_person_sd",
+                "--vc-scope", "oid4vc_natural_person_jwt");
             cli("login", "--realm", realm, "--client-id", "oid4vci-client",
                 "--user", "alice", "--password", "password",
                 "--scope", "oid4vc_natural_person_jwt");

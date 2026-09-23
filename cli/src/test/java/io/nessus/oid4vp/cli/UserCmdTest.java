@@ -33,7 +33,9 @@ class UserCmdTest extends AbstractCmdTest {
                 "--realm", "cli-test-user",
                 "--first-name", "Max", "--last-name", "Mustermann",
                 "--email", "max@test.com", "--password", "password",
-                "--role", "issuer");
+                "--role", "issuer",
+                "--vc-scope", "oid4vc_natural_person_sd",
+                "--vc-scope", "oid4vc_natural_person_jwt");
             assertEquals(0, result.exitCode(), result.stderr());
             assertTrue(result.stdout().contains("Created user: max"), result.stdout());
             assertTrue(result.stdout().contains("Assigned role"), result.stdout());
@@ -53,7 +55,9 @@ class UserCmdTest extends AbstractCmdTest {
             var result = cli("user", "create", "alice",
                 "--realm", "cli-test-user2",
                 "--first-name", "Alice", "--last-name", "Wonderland",
-                "--email", "alice@test.com", "--password", "password");
+                "--email", "alice@test.com", "--password", "password",
+                "--vc-scope", "oid4vc_natural_person_sd",
+                "--vc-scope", "oid4vc_natural_person_jwt");
             assertEquals(0, result.exitCode(), result.stderr());
             assertTrue(result.stdout().contains("Created user: alice"), result.stdout());
             assertTrue(result.stdout().contains("Assigned VC scope"), result.stdout());

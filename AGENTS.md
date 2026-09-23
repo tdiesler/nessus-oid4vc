@@ -41,6 +41,31 @@
 - Sort methods alphabetically unless logical grouping or lifecycle order is
   clearer for the specific code.
 
+### Keycloak interaction
+
+**CLI implementation** — the `oid4vc` CLI delegates to:
+
+1. Keycloak Admin Client Java API (`keycloak-admin-client`) when the required
+   functionality is available there (e.g., realm, client, user, key,
+   client-scope management).
+2. Direct Keycloak REST API calls (`httpPost`/`httpGet`) only for functionality
+   not exposed by the admin client (e.g., OID4VCI credential endpoints, VC
+   scope assignment).
+
+All use cases must be completable end-to-end using the `oid4vc` CLI alone,
+without requiring alternative tools.
+
+**CLI naming convention** — when an `oid4vc` command mirrors or extends an
+existing `kcadm.sh` command, inherit `kcadm` parameter and option names rather
+than inventing new ones. This keeps the CLI familiar to Keycloak users and
+avoids gratuitous divergence.
+
+**Development and debugging** — preferred order for inspecting Keycloak state:
+
+1. `oid4vc` CLI (`bin/oid4vc`)
+2. `kcadm.sh` (Keycloak's built-in admin CLI)
+3. Direct REST API calls (curl)
+
 ## Instruction currency
 
 - `AGENTS.md` must describe the current repository state and working agreement.
@@ -67,7 +92,7 @@
 
 ## Project tracking
 
-Project repository and issue tracker is `https://github.com/tdiesler/nessus-oid4vp`. 
+Project repository and issue tracker is `https://github.com/tdiesler/nessus-oid4vc`. 
 Normal issue and milestone management for this repository is authorized; destructive repository, account,
 release, or branch operations still require explicit approval.
 

@@ -8,6 +8,7 @@
 //DEPS com.microsoft.playwright:playwright:1.44.0
 
 //SOURCES ClientCmd.java
+//SOURCES ClientScopeCmd.java
 //SOURCES KeyCmd.java
 //SOURCES LoginCmd.java
 //SOURCES LogoutCmd.java
@@ -41,9 +42,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 
-@Command(name = "oid4vp", mixinStandardHelpOptions = true,
+@Command(name = "oid4vc", mixinStandardHelpOptions = true,
     subcommands = {
         ClientCmd.class,
+        ClientScopeCmd.class,
         KeyCmd.class,
         LoginCmd.class,
         LogoutCmd.class,
@@ -108,6 +110,17 @@ public class RootCmd implements Runnable {
             .authorization("Bearer " + conn.accessToken)
             .resteasyClient(client)
             .build();
+    }
+
+    static WalletState.Connection resolveWalletEntry(WalletState wallet, String realm, String user) {
+        if (wallet.realms == null || !wallet.realms.containsKey(realm)) {
+            throw new IllegalStateException("No wallet entry for realm '" + realm + "'. Run 'oid4vp user create' first.");
+        }
+        var realmState = wallet.realms.get(realm);
+        if (realmState.users == null || !realmState.users.containsKey(user)) {
+            throw new IllegalStateException("No wallet entry for user '" + user + "' in realm '" + realm + "'. Run 'oid4vp user create' first.");
+        }
+        return realmState.users.get(user);
     }
 
     static WalletState.Connection resolveConnection(WalletState wallet, String realm, String user) {

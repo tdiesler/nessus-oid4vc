@@ -25,7 +25,7 @@
         <version.com.fasterxml.jackson>2.22.2</version.com.fasterxml.jackson>
         <version.info.picocli>4.7.6</version.info.picocli>
         <version.org.junit>5.11.4</version.org.junit>
-        <!-- Keep aligned with cli/src/.../oid4vp.java //DEPS (from github.com/keycloak/keycloak-client) -->
+        <!-- Keep aligned with cli/src/.../oid4vc.java //DEPS (from github.com/keycloak/keycloak-client) -->
         <version.com.microsoft.playwright>1.44.0</version.com.microsoft.playwright>
         <version.com.nimbusds>9.37.3</version.com.nimbusds>
         <version.org.keycloak>26.0.12</version.org.keycloak>

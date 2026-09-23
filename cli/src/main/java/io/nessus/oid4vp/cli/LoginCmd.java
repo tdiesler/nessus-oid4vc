@@ -73,12 +73,6 @@ class LoginCmd implements Callable<Integer> {
             }
             if (json == null) return 1;
 
-            var conn = new WalletState.Connection();
-            conn.clientId = oauthClientId;
-            conn.accessToken = json.get("access_token").asText();
-            conn.refreshToken = json.get("refresh_token").asText();
-            conn.expiresAt = Instant.now().plusSeconds(json.get("expires_in").asLong()).toString();
-
             WalletState state;
             try {
                 state = loadWallet();
@@ -93,7 +87,12 @@ class LoginCmd implements Callable<Integer> {
                 rs.users = new HashMap<>();
                 return rs;
             });
-            realmState.users.put(user, conn);
+            if (realmState.users == null) realmState.users = new HashMap<>();
+            var conn = realmState.users.computeIfAbsent(user, k -> new WalletState.Connection());
+            conn.clientId = oauthClientId;
+            conn.accessToken = json.get("access_token").asText();
+            conn.refreshToken = json.get("refresh_token").asText();
+            conn.expiresAt = Instant.now().plusSeconds(json.get("expires_in").asLong()).toString();
             realmState.defaultUser = user;
 
             if (realm == null) {

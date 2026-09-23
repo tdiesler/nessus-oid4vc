@@ -7,6 +7,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -46,6 +47,9 @@ class UserCmd implements Runnable {
         @Option(names = "--role", description = "User role (e.g., issuer)")
         String role;
 
+        @Option(names = "--vc-scope", description = "VC scope to assign (repeatable)")
+        List<String> vcScopes;
+
         @Override
         public Integer call() {
             var realmName = resolveRealm(realm);
@@ -73,6 +77,15 @@ class UserCmd implements Runnable {
                     var userId = location != null ? location.getPath().replaceAll(".*/", "") : null;
                     System.out.println("Created user: " + username + " (" + userId + ")");
 
+                    if (userId != null) {
+                        var wallet = loadWallet();
+                        if (wallet.realms == null) wallet.realms = new LinkedHashMap<>();
+                        var realmState = wallet.realms.computeIfAbsent(realmName, k -> new WalletState.RealmState());
+                        if (realmState.users == null) realmState.users = new LinkedHashMap<>();
+                        realmState.users.computeIfAbsent(username, k -> new WalletState.Connection());
+                        saveWallet(wallet);
+                    }
+
                     if ("issuer".equals(role) && userId != null) {
                         var roleName = "credential-offer-create";
                         try {
@@ -85,14 +98,14 @@ class UserCmd implements Runnable {
                         }
                     }
 
-                    if (userId != null) {
+                    if (userId != null && vcScopes != null && !vcScopes.isEmpty()) {
                         var wallet = loadWallet();
                         var adminConn = resolveConnection(wallet, "master", null);
                         if (Instant.parse(adminConn.expiresAt).minusSeconds(30).isBefore(Instant.now())) {
                             refreshAccessToken(wallet.serverUrl, "master", adminConn);
                             saveWallet(wallet);
                         }
-                        for (var vcScope : List.of("oid4vc_natural_person_sd", "oid4vc_natural_person_jwt")) {
+                        for (var vcScope : vcScopes) {
                             var body = MAPPER.writeValueAsString(Map.of("credentialScopeName", vcScope));
                             var vcResponse = httpPost(
                                 wallet.serverUrl + "/admin/realms/" + realmName + "/users/" + userId + "/vc/credentials",

@@ -131,7 +131,7 @@ class VcCmd implements Runnable {
                 var credentials = credJson.get("credentials");
                 if (credentials != null && credentials.isArray() && !credentials.isEmpty()) {
                     String vcJwt = credentials.get(0).get("credential").asText();
-                    System.out.println("Credential: " + vcJwt);
+                    System.out.println(vcJwt);
                 } else {
                     System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(credJson));
                 }

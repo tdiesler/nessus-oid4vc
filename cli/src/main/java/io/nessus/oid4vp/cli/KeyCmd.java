@@ -66,7 +66,7 @@ class KeyCmd implements Runnable {
                 if (ecKey == null) return 1;
 
                 var wallet = loadWallet();
-                var conn = resolveConnection(wallet, realmName, user);
+                var conn = resolveWalletEntry(wallet, realmName, user);
                 if (conn.keys == null) conn.keys = new ArrayList<>();
 
                 String kid;

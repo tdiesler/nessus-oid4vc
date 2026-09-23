@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-OID4VP="${SCRIPT_DIR}/oid4vp"
+OID4VC="${SCRIPT_DIR}/oid4vc"
 
 VERBOSE=""
 REALM="oid4vci"
@@ -13,6 +13,16 @@ for arg in "$@"; do
     *) REALM="${arg}" ;;
   esac
 done
+
+decode_vc() {
+  local jwt="$1"
+  python3 -c "
+import base64, json, sys
+payload = '${jwt}'.split('.')[1]
+payload += '=' * (4 - len(payload) % 4)
+print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
+"
+}
 
 # The wallet stores three token-related values:
 #
@@ -39,39 +49,59 @@ is_refresh_token_still_valid() {
 #
 if ! is_refresh_token_still_valid; then
   KC_ADMIN_PASSWORD="$(kubectl --context=rancher-desktop get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d)"
-  ${OID4VP} ${VERBOSE} login --server http://localhost:30800 --password "${KC_ADMIN_PASSWORD}"
+  ${OID4VC} ${VERBOSE} login --server http://localhost:30800 --password "${KC_ADMIN_PASSWORD}"
 fi
 
 # Delete OID4VCI Realm
 #
-${OID4VP} ${VERBOSE} realm delete "${REALM}" 2>/dev/null || true
+${OID4VC} ${VERBOSE} realm delete "${REALM}" 2>/dev/null || true
 
 # Create OID4VCI Realm
 #
-${OID4VP} ${VERBOSE} realm create "${REALM}"
+${OID4VC} ${VERBOSE} realm create "${REALM}"
 
 # Create Realm Keys
 #
-${OID4VP} ${VERBOSE} key create --realm "${REALM}" --algo ES256 --priority 120
-${OID4VP} ${VERBOSE} key create --realm "${REALM}" --algo ECDH-ES --priority 130
+${OID4VC} ${VERBOSE} key create --realm "${REALM}" --algo "ES256" --priority "120"
+${OID4VC} ${VERBOSE} key create --realm "${REALM}" --algo "ECDH-ES" --priority "130"
 
 # Create OID4VCI Client
 #
-${OID4VP} ${VERBOSE} client create oid4vci-client
+${OID4VC} ${VERBOSE} client create "oid4vci-client" \
+  --vc-scope "oid4vc_natural_person_sd" \
+  --vc-scope "oid4vc_natural_person_jwt"
 
 # Create Users
 #
-${OID4VP} ${VERBOSE} user create max --first-name Max --last-name Mustermann --email user@email.com --password password --role issuer
-${OID4VP} ${VERBOSE} user create alice --first-name Alice --last-name Wonderland --email alice@email.com --password password
+${OID4VC} ${VERBOSE} user create "max" --first-name "Max" --last-name "Mustermann" --email "user@email.com" --password "password" --role "issuer"
+${OID4VC} ${VERBOSE} user create "alice" --first-name "Alice" --last-name "Wonderland" --email "alice@email.com" --password "password" \
+  --vc-scope "oid4vc_natural_person_sd" \
+  --vc-scope "oid4vc_natural_person_jwt"
 
-# Holder Login & Key
+# Holder Key
 #
-${OID4VP} ${VERBOSE} login --realm "${REALM}" --client-id oid4vci-client --user alice --password password --scope "oid4vc_natural_person_jwt"
-${OID4VP} ${VERBOSE} key create --user alice --algo ES256
+${OID4VC} ${VERBOSE} key create --user "alice" --algo "ES256"
 
-# Get Verifiable Credential
+# Holder Login & Credential (JWT)
 #
-${OID4VP} ${VERBOSE} vc get --credential-id oid4vc_natural_person_jwt_0000
+scope="oid4vc_natural_person_jwt"
+${OID4VC} ${VERBOSE} login --realm "${REALM}" --client-id "oid4vci-client" --user "alice" --password "password" --scope "${scope}"
+vc_jwt=$(${OID4VC} ${VERBOSE} vc get --credential-id "${scope}_0000")
+echo "Credential: ${vc_jwt}"
+decode_vc "${vc_jwt}"
+
+# Create Boarding Gate Client Scopes
+#
+${OID4VC} ${VERBOSE} client-scope create "oid4vc_airline_ticket_jwt" \
+  --attr "vc.verifiable_credential_type=AirlineTicketCredential" \
+  --attr "vc.supported_credential_types=AirlineTicketCredential" \
+  --attr "vc.credential_contexts=AirlineTicketCredential" \
+  --attr "vc.display=[{\"name\":\"Airline Ticket\",\"locale\":\"en\"}]" \
+  --mapper "passengerName=firstName" \
+  --mapper "flightNumber=flightNumber" \
+  --mapper "route=route" \
+  --mapper "departureDateTime=departureDateTime" \
+  --mapper "bookingReference=bookingReference"
 
 echo
 echo "Realm setup complete: ${REALM}"

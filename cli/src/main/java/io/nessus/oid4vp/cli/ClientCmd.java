@@ -26,6 +26,9 @@ class ClientCmd implements Runnable {
         @CommandLine.Parameters(index = "0", description = "Client ID")
         String clientId;
 
+        @Option(names = "--vc-scope", description = "Optional VC client scope (repeatable)")
+        List<String> vcScopes;
+
         @Option(names = "--realm", description = "Realm name (defaults to current realm)")
         String realm;
 
@@ -42,10 +45,7 @@ class ClientCmd implements Runnable {
                 clientRep.setDirectAccessGrantsEnabled(true);
                 clientRep.setRedirectUris(List.of("urn:ietf:wg:oauth:2.0:oob", "https://oauth.pstmn.io/v1/callback"));
                 clientRep.setDefaultClientScopes(List.of("basic", "profile"));
-                clientRep.setOptionalClientScopes(List.of(
-                    "oid4vc_natural_person_sd",
-                    "oid4vc_natural_person_jwt"
-                ));
+                clientRep.setOptionalClientScopes(vcScopes != null ? vcScopes : List.of());
                 clientRep.setAttributes(Map.of("oid4vci.enabled", "true"));
 
                 try (var response = kc.realm(realmName).clients().create(clientRep)) {
