@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Airline Ticket Booking</title>
+    <style>
+        body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
+        h1 { color: #333; }
+        label { display: block; margin-top: 12px; font-weight: bold; }
+        input { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; }
+        button { margin-top: 20px; padding: 10px 24px; background: #0066cc; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0052a3; }
+        #result { margin-top: 20px; padding: 12px; border-radius: 4px; display: none; }
+        .success { background: #e6f4ea; color: #1a7f37; }
+        .error { background: #fde8e8; color: #c33; }
+    </style>
+</head>
+<body>
+    <nav><a href="/graphql.html">GraphQL Explorer &rarr;</a></nav>
+    <h1>Airline Ticket Booking</h1>
+    <form id="bookingForm">
+        <label>Passenger Id
+            <input name="passengerId" required value="alice">
+        </label>
+        <label>Passenger Name
+            <input name="passengerName" required value="Alice Wonderland">
+        </label>
+        <label>Flight Number
+            <input name="flightNumber" required value="BA123">
+        </label>
+        <label>Route
+            <input name="route" required value="LHR-JFK">
+        </label>
+        <label>Departure Date/Time
+            <input name="departureDateTime" type="datetime-local" required>
+        </label>
+        <button type="submit">Create Booking</button>
+    </form>
+    <div id="result"></div>
+    <script>
+        document.getElementById('bookingForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const data = Object.fromEntries(new FormData(form));
+            const passengerId = data.passengerId;
+            delete data.passengerId;
+            if (data.departureDateTime) {
+                data.departureDateTime = new Date(data.departureDateTime).toISOString();
+            }
+            const res = document.getElementById('result');
+            try {
+                const resp = await fetch('/api/booking', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Passenger-Id': passengerId },
+                    body: JSON.stringify(data)
+                });
+                if (resp.ok) {
+                    const result = await resp.json();
+                    res.textContent = 'Booking created: ' + result.bookingReference;
+                    res.className = 'success';
+                } else {
+                    res.textContent = 'Error: ' + (await resp.text());
+                    res.className = 'error';
+                }
+            } catch (err) {
+                res.textContent = 'Error: ' + err.message;
+                res.className = 'error';
+            }
+            res.style.display = 'block';
+        });
+    </script>
+</body>
+</html>

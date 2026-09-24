@@ -1,0 +1,52 @@
+{{- with .Values.deployments.ticket }}
+---
+
+# Ticket Service Deployment
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ticket
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ticket
+  template:
+    metadata:
+      annotations:
+        rollme: {{ $.Release.Revision | quote }}
+      labels:
+        app.kubernetes.io/name: ticket
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/release: {{ $.Release.Name }}
+    spec:
+      containers:
+        - name: ticket
+          image: {{ .image }}:{{ .version }}
+          imagePullPolicy: {{ .pullPolicy }}
+          ports:
+            - containerPort: 18080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 18080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+
+# Ticket Service
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: ticket
+spec:
+  type: NodePort
+  ports:
+    - port: 18080
+      nodePort: {{ .nodePort }}
+  selector:
+    app.kubernetes.io/name: ticket
+---
+{{- end }}

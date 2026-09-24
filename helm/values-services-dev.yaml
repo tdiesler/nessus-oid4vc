@@ -25,3 +25,11 @@ deployments:
     version: 26.7.4
     nodePort: 30800
     pullPolicy: IfNotPresent
+
+  # Ticket Service
+  #
+  ticket:
+    image: "nessus/oid4vc-demo-ticket"
+    version: "1.0.0-SNAPSHOT"
+    nodePort: 30100
+    pullPolicy: IfNotPresent

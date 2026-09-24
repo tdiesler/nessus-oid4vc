@@ -96,7 +96,7 @@ ${OID4VC} ${VERBOSE} scope create "oid4vc_airline_ticket_jwt" \
   --credential-type "AirlineTicketCredential" \
   --credential-description "Airline Ticket" \
   --graphql-claim-name "airline-ticket" \
-  --graphql-endpoint "http://host.docker.internal:18080/graphql" \
+  --graphql-endpoint "http://ticket:18080/graphql" \
   --graphql-query "query(\$id: String!) { booking(passengerId: \$id) { flightNumber route departureDateTime bookingReference passengerName } }" \
   --graphql-variable-mapping "id=username" \
   --graphql-response-path "booking"

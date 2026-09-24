@@ -16,6 +16,7 @@
         <module>dcql</module>
         <module>mapper</module>
         <module>cli</module>
+        <module>demo/airport/ticket</module>
     </modules>
 
     <properties>

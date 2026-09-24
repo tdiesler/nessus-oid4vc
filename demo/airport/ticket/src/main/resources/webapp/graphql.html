@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GraphQL Explorer</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
+        h1 { color: #333; }
+        nav { margin-bottom: 20px; }
+        nav a { color: #0066cc; text-decoration: none; }
+        nav a:hover { text-decoration: underline; }
+        label { display: block; margin-top: 12px; font-weight: bold; }
+        textarea { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; font-family: monospace; font-size: 14px; }
+        button { margin-top: 16px; padding: 10px 24px; background: #0066cc; color: white; border: none; cursor: pointer; }
+        button:hover { background: #0052a3; }
+        pre { background: #f4f4f4; padding: 16px; border-radius: 4px; overflow-x: auto; white-space: pre-wrap; margin-top: 12px; }
+    </style>
+</head>
+<body>
+    <nav><a href="/">&larr; Booking</a></nav>
+    <h1>GraphQL Explorer</h1>
+    <form id="graphqlForm">
+        <label>Query
+            <textarea name="query" rows="9">query($id: String!) {
+  booking(passengerId: $id) {
+    flightNumber
+    route
+    departureDateTime
+    bookingReference
+    passengerName
+  }
+}</textarea>
+        </label>
+        <label>Variables
+            <textarea name="variables" rows="1">{"id": "alice"}</textarea>
+        </label>
+        <button type="submit">Run Query</button>
+    </form>
+    <h3>Result</h3>
+    <pre id="result">—</pre>
+    <script>
+        document.getElementById('graphqlForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const form = e.target;
+            const query = form.query.value;
+            let variables = {};
+            try { variables = JSON.parse(form.variables.value || '{}'); } catch (_) {}
+            const res = document.getElementById('result');
+            try {
+                const resp = await fetch('/graphql', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, variables })
+                });
+                const json = await resp.json();
+                res.textContent = JSON.stringify(json, null, 2);
+            } catch (err) {
+                res.textContent = 'Error: ' + err.message;
+            }
+        });
+    </script>
+</body>
+</html>
