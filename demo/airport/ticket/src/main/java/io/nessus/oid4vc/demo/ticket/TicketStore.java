@@ -11,7 +11,15 @@ public class TicketStore {
         return bookings.get(passengerId);
     }
 
+    public Map<String, Booking> getAllBookings() {
+        return Map.copyOf(bookings);
+    }
+
     public void putBooking(String passengerId, Booking booking) {
         bookings.put(passengerId, booking);
+    }
+
+    public void clear() {
+        bookings.clear();
     }
 }

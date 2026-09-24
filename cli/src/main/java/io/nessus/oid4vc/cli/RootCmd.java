@@ -9,6 +9,7 @@
 
 //SOURCES ClientCmd.java
 //SOURCES ClientScopeCmd.java
+//SOURCES DemoCmd.java
 //SOURCES KeyCmd.java
 //SOURCES LoginCmd.java
 //SOURCES LogoutCmd.java
@@ -46,6 +47,7 @@ import java.time.Instant;
     subcommands = {
         ClientCmd.class,
         ClientScopeCmd.class,
+        DemoCmd.class,
         KeyCmd.class,
         LoginCmd.class,
         LogoutCmd.class,

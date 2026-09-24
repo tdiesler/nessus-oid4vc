@@ -17,6 +17,7 @@ class WalletState {
         public String clientId;
         public String defaultKey;
         public List<Map<String, Object>> keys;
+        public Map<String, String> credentials;
         public String accessToken;
         public String refreshToken;
         public String expiresAt;

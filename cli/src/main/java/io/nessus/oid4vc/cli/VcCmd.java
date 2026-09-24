@@ -12,6 +12,7 @@ import picocli.CommandLine.Option;
 
 import java.time.Instant;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -131,6 +132,10 @@ class VcCmd implements Runnable {
                 var credentials = credJson.get("credentials");
                 if (credentials != null && credentials.isArray() && !credentials.isEmpty()) {
                     String vcJwt = credentials.get(0).get("credential").asText();
+                    var credKey = credId != null ? credId : credConfigId;
+                    if (conn.credentials == null) conn.credentials = new LinkedHashMap<>();
+                    conn.credentials.put(credKey, vcJwt);
+                    saveWallet(wallet);
                     System.out.println(vcJwt);
                 } else {
                     System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(credJson));

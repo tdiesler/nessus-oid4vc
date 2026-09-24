@@ -125,4 +125,40 @@ class TicketServiceTest {
         assertEquals(200, resp.statusCode());
         assertTrue(resp.body().contains("GraphQL Explorer"));
     }
+
+    @Test
+    void listAndClearBookings() throws Exception {
+        store.clear();
+        store.putBooking("bob", new Booking("LH456", "FRA-MUC", "2026-11-01T10:00:00Z", "ABC123", "Bob Builder"));
+
+        var listReq = HttpRequest.newBuilder()
+                .uri(URI.create(BASE + "/api/bookings"))
+                .GET()
+                .build();
+        var listResp = HTTP.send(listReq, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, listResp.statusCode());
+        var bookings = JSON.readTree(listResp.body());
+        assertEquals("LH456", bookings.get("bob").get("flightNumber").asText());
+
+        var clearReq = HttpRequest.newBuilder()
+                .uri(URI.create(BASE + "/api/bookings"))
+                .DELETE()
+                .build();
+        var clearResp = HTTP.send(clearReq, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, clearResp.statusCode());
+
+        var afterClear = HTTP.send(listReq, HttpResponse.BodyHandlers.ofString());
+        assertEquals("{}", JSON.readTree(afterClear.body()).toString());
+    }
+
+    @Test
+    void bookingsPageReturnsHtml() throws Exception {
+        var req = HttpRequest.newBuilder()
+                .uri(URI.create(BASE + "/bookings.html"))
+                .GET()
+                .build();
+        var resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, resp.statusCode());
+        assertTrue(resp.body().contains("Bookings"));
+    }
 }

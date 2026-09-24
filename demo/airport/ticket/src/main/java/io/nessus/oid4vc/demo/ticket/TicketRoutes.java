@@ -1,11 +1,14 @@
 package io.nessus.oid4vc.demo.ticket;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 import java.util.UUID;
 
 public class TicketRoutes extends RouteBuilder {
+
+    private static final ObjectMapper JSON = new ObjectMapper();
 
     private final GraphQLHandler graphQLHandler;
     private final TicketStore store;
@@ -50,6 +53,27 @@ public class TicketRoutes extends RouteBuilder {
                 .process(exchange -> {
                     var html = new String(getClass().getClassLoader()
                             .getResourceAsStream("webapp/index.html").readAllBytes());
+                    exchange.getIn().setBody(html);
+                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "text/html");
+                });
+
+        from("undertow:http://0.0.0.0:" + port + "/api/bookings?httpMethodRestrict=GET")
+                .process(exchange -> {
+                    exchange.getIn().setBody(JSON.writeValueAsString(store.getAllBookings()));
+                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
+                });
+
+        from("undertow:http://0.0.0.0:" + port + "/api/bookings?httpMethodRestrict=DELETE")
+                .process(exchange -> {
+                    store.clear();
+                    exchange.getIn().setBody("{\"status\":\"cleared\"}");
+                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
+                });
+
+        from("undertow:http://0.0.0.0:" + port + "/bookings.html?httpMethodRestrict=GET")
+                .process(exchange -> {
+                    var html = new String(getClass().getClassLoader()
+                            .getResourceAsStream("webapp/bookings.html").readAllBytes());
                     exchange.getIn().setBody(html);
                     exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "text/html");
                 });

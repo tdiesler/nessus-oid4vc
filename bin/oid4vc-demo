@@ -1,0 +1,112 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+OID4VC="${SCRIPT_DIR}/oid4vc"
+source "${SCRIPT_DIR}/oid4vc-functions"
+
+VERBOSE=""
+REALM="oid4vci"
+for arg in "$@"; do
+  case "${arg}" in
+    --verbose) VERBOSE="--verbose" ;;
+    *) REALM="${arg}" ;;
+  esac
+done
+
+run_cmd() {
+  local display="" prev_was_option=false
+  for arg in "$@"; do
+    if [[ "${arg}" == "${OID4VC}" ]]; then
+      display+="oid4vc "
+      prev_was_option=false
+    elif [[ "${arg}" == --* ]]; then
+      display+="${arg} "
+      prev_was_option=true
+    elif ${prev_was_option}; then
+      display+="\"${arg}\" "
+      prev_was_option=false
+    else
+      display+="${arg} "
+      prev_was_option=false
+    fi
+  done
+  echo
+  echo "  \$ ${display}"
+  echo
+  read -rp "  Press Enter to run..."
+  echo
+  "$@"
+}
+
+get_vc() {
+  local scope="$1"
+  local label="$2"
+
+  echo
+  echo "  Step 1/2: Login as Alice with scope ${scope}"
+  run_cmd ${OID4VC} ${VERBOSE} login \
+    --realm "${REALM}" \
+    --client-id "oid4vci-client" \
+    --user "alice" \
+    --password "password" \
+    --scope "${scope}"
+
+  echo
+  echo "  Step 2/2: Request the ${label}"
+  echo
+  echo "  \$ oid4vc vc get --credential-id \"${scope}_0000\""
+  echo
+  read -rp "  Press Enter to run..."
+  echo
+  vc_jwt=$(${OID4VC} ${VERBOSE} vc get --credential-id "${scope}_0000")
+  echo
+  echo "  Decoded Verifiable Credential:"
+  echo
+  decode_vc "${vc_jwt}"
+}
+
+do_passport() {
+  get_vc "oid4vc_natural_person_jwt" "Passport Credential"
+}
+
+do_booking() {
+  echo
+  echo "  Create an airline ticket booking for passenger Alice"
+  run_cmd ${OID4VC} ${VERBOSE} demo booking \
+    --passenger-id "alice" \
+    --passenger-name "Alice Wonderland" \
+    --flight "BA123" \
+    --route "LHR-JFK" \
+    --departure "2026-10-15T08:30:00Z"
+}
+
+do_ticket() {
+  get_vc "oid4vc_airline_ticket_jwt" "Airline Ticket Credential"
+}
+
+next="1"
+
+while true; do
+  echo
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "  OID4VCI Airline Ticket Demo"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo
+  echo "  1 - Get a passport credential"
+  echo "  2 - Make an airline booking"
+  echo "  3 - Get the airline ticket credential"
+  echo "  q - Quit"
+  echo
+  read -rp "  Choose an option [${next}]: " choice
+  choice="${choice:-${next}}"
+
+  case "${choice}" in
+    1) do_passport; next="2" ;;
+    2) do_booking; next="3" ;;
+    3) do_ticket; next="q" ;;
+    q|Q) echo; echo "  Bye."; break ;;
+    *) echo "  Invalid option." ;;
+  esac
+done
