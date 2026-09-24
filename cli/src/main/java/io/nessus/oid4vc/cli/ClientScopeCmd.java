@@ -14,7 +14,7 @@ import java.util.concurrent.Callable;
 
 import static io.nessus.oid4vc.cli.RootCmd.*;
 
-@Command(name = "client-scope", mixinStandardHelpOptions = true, description = "Manage client scopes",
+@Command(name = "scope", mixinStandardHelpOptions = true, description = "Manage client scopes",
     subcommands = { ClientScopeCmd.Create.class })
 class ClientScopeCmd implements Runnable {
 
@@ -29,11 +29,32 @@ class ClientScopeCmd implements Runnable {
         @CommandLine.Parameters(index = "0", description = "Client scope name (e.g. oid4vc_airline_ticket_jwt)")
         String name;
 
+        @Option(names = "--credential-type", description = "Verifiable credential type (e.g. AirlineTicketCredential)")
+        String credentialType;
+
+        @Option(names = "--credential-description", description = "Human-readable credential description (e.g. 'Airline Ticket')")
+        String credentialDescription;
+
         @Option(names = "--attr", description = "Scope attribute (key=value, repeatable)")
         List<String> attrs;
 
         @Option(names = "--mapper", description = "Claim mapper (claimName=userAttribute, repeatable)")
         List<String> mappers;
+
+        @Option(names = "--graphql-endpoint", description = "GraphQL endpoint URL for external claim mapper")
+        String graphqlEndpoint;
+
+        @Option(names = "--graphql-query", description = "GraphQL query template")
+        String graphqlQuery;
+
+        @Option(names = "--graphql-variable-mapping", description = "GraphQL variable mapping (e.g. 'id=username')")
+        String graphqlVariableMapping;
+
+        @Option(names = "--graphql-response-path", description = "Dot-separated path into GraphQL response data")
+        String graphqlResponsePath;
+
+        @Option(names = "--graphql-claim-name", description = "Claim name for the GraphQL mapper")
+        String graphqlClaimName;
 
         @Option(names = "--realm", description = "Realm name (defaults to current realm)")
         String realm;
@@ -60,6 +81,15 @@ class ClientScopeCmd implements Runnable {
                 attrMap.put("include.in.token.scope", "true");
                 attrMap.put("display.on.consent.screen", "true");
 
+                if (credentialType != null) {
+                    attrMap.put("vc.verifiable_credential_type", credentialType);
+                    attrMap.put("vc.supported_credential_types", credentialType);
+                    attrMap.put("vc.credential_contexts", credentialType);
+                }
+                if (credentialDescription != null) {
+                    attrMap.put("vc.display", "[{\"name\":\"" + credentialDescription + "\",\"locale\":\"en\"}]");
+                }
+
                 if (attrs != null) {
                     for (var attr : attrs) {
                         var idx = attr.indexOf('=');
@@ -78,7 +108,7 @@ class ClientScopeCmd implements Runnable {
                 subjectMapper.setName("subject-id");
                 subjectMapper.setProtocol("oid4vc");
                 subjectMapper.setProtocolMapper("oid4vc-subject-id-mapper");
-                subjectMapper.setConfig(Map.of("claim.name", "id", "userAttribute", "did"));
+                subjectMapper.setConfig(Map.of("claim.name", "id", "userAttribute", "username"));
                 protocolMappers.add(subjectMapper);
 
                 if (mappers != null) {
@@ -103,6 +133,21 @@ class ClientScopeCmd implements Runnable {
                         protocolMappers.add(pm);
                     }
                 }
+                if (graphqlEndpoint != null) {
+                    var gqlMapper = new ProtocolMapperRepresentation();
+                    gqlMapper.setName(graphqlClaimName != null ? graphqlClaimName : "graphql-claims");
+                    gqlMapper.setProtocol("oid4vc");
+                    gqlMapper.setProtocolMapper("oid4vc-graphql-claim-mapper");
+                    var gqlConfig = new LinkedHashMap<String, String>();
+                    gqlConfig.put("claim.name", graphqlClaimName != null ? graphqlClaimName : "graphql-claims");
+                    gqlConfig.put("graphqlEndpoint", graphqlEndpoint);
+                    if (graphqlQuery != null) gqlConfig.put("graphqlQuery", graphqlQuery);
+                    if (graphqlVariableMapping != null) gqlConfig.put("graphqlVariableMapping", graphqlVariableMapping);
+                    if (graphqlResponsePath != null) gqlConfig.put("responsePath", graphqlResponsePath);
+                    gqlMapper.setConfig(gqlConfig);
+                    protocolMappers.add(gqlMapper);
+                }
+
                 rep.setProtocolMappers(protocolMappers);
 
                 try (var response = kc.realm(realmName).clientScopes().create(rep)) {

@@ -86,6 +86,16 @@ avoids gratuitous divergence.
   startup-discovery instructions here. Obtain dynamic work-item status from
   GitHub.
 
+## Keycloak source reference
+
+A local Keycloak checkout at `../keycloak` is available for inspecting SPI
+interfaces. Key locations for OID4VCI mapper work:
+
+- Mapper base class: `services/src/main/java/org/keycloak/protocol/oid4vc/issuance/mappers/OID4VCMapper.java`
+- Built-in mappers (same package): `OID4VCUserAttributeMapper`, `OID4VCStaticClaimMapper`, etc.
+- Feature gate: `OID4VCEnvironmentProviderFactory` — requires `Profile.Feature.OID4VC_VCI`
+- SPI registration: `META-INF/services/org.keycloak.protocol.ProtocolMapper`
+
 ## Session startup and sources of truth
 
 - Record commit identities for experiments only when the commit is on `main`.

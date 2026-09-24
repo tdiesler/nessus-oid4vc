@@ -1,7 +1,7 @@
 ///usr/bin/env jbang "$0" "$@" ; exit $?
 
 //DEPS info.picocli:picocli:4.7.6
-// Keep keycloak version aligned with pom.xml (from github.com/keycloak/keycloak-client)
+// Keep keycloak-client version aligned with pom.xml (from github.com/keycloak/keycloak-client)
 //DEPS org.keycloak:keycloak-admin-client:26.0.12
 //DEPS com.fasterxml.jackson.core:jackson-databind:2.17.0
 //DEPS com.nimbusds:nimbus-jose-jwt:9.37.3

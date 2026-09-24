@@ -90,18 +90,16 @@ vc_jwt=$(${OID4VC} ${VERBOSE} vc get --credential-id "${scope}_0000")
 echo "Credential: ${vc_jwt}"
 decode_vc "${vc_jwt}"
 
-# Create Boarding Gate Client Scopes
+# Create Airline Ticket Scope with GraphQL protocol mapper
 #
-${OID4VC} ${VERBOSE} client-scope create "oid4vc_airline_ticket_jwt" \
-  --attr "vc.verifiable_credential_type=AirlineTicketCredential" \
-  --attr "vc.supported_credential_types=AirlineTicketCredential" \
-  --attr "vc.credential_contexts=AirlineTicketCredential" \
-  --attr "vc.display=[{\"name\":\"Airline Ticket\",\"locale\":\"en\"}]" \
-  --mapper "passengerName=firstName" \
-  --mapper "flightNumber=flightNumber" \
-  --mapper "route=route" \
-  --mapper "departureDateTime=departureDateTime" \
-  --mapper "bookingReference=bookingReference"
+${OID4VC} ${VERBOSE} scope create "oid4vc_airline_ticket_jwt" \
+  --credential-type "AirlineTicketCredential" \
+  --credential-description "Airline Ticket" \
+  --graphql-claim-name "airline-ticket" \
+  --graphql-endpoint "http://host.docker.internal:18080/graphql" \
+  --graphql-query "query(\$id: String!) { booking(passengerId: \$id) { flightNumber route departureDateTime bookingReference passengerName } }" \
+  --graphql-variable-mapping "id=username" \
+  --graphql-response-path "booking"
 
 echo
 echo "Realm setup complete: ${REALM}"

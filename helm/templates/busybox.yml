@@ -1,0 +1,27 @@
+{{- if .Values.deployments.busybox }}
+---
+
+# BusyBox Pod — backdoor to cp files into shared PVCs
+#
+apiVersion: v1
+kind: Pod
+metadata:
+  name: busybox
+  labels:
+    app.kubernetes.io/name: busybox
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/release: {{ .Release.Name }}
+spec:
+  containers:
+    - name: busybox
+      image: busybox
+      command: [ "sleep", "infinity" ]
+      volumeMounts:
+        - name: providers
+          mountPath: /providers
+  volumes:
+    - name: providers
+      persistentVolumeClaim:
+        claimName: keycloak-providers
+---
+{{- end }}

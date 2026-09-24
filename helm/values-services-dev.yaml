@@ -5,6 +5,11 @@ environment: dev
 
 deployments:
 
+  # Backdoor for PV access
+  #
+  busybox:
+    pullPolicy: IfNotPresent
+
   # SQL Service
   #
   postgres:
