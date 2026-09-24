@@ -1,4 +1,4 @@
-# Nessus OID4VP
+# Nessus OID4VC
 
 OpenID for Verifiable Presentations — DCQL verification and OID4VCI tooling.
 
@@ -17,4 +17,4 @@ KC_ADMIN_PASSWORD="$(kubectl --context=rancher-desktop get secret keycloak-secre
 bin/oid4vc login --server http://localhost:30800 --password "${KC_ADMIN_PASSWORD}"
 ```
 
-Session tokens are stored in `~/.config/nessus-oid4vp/wallet.json` (no password on disk).
+Session tokens are stored in `~/.config/wallet.json`

@@ -5,12 +5,12 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>io.nessus.oid4vp</groupId>
-        <artifactId>oid4vp</artifactId>
+        <groupId>io.nessus.oid4vc</groupId>
+        <artifactId>oid4vc</artifactId>
         <version>1.0.0-SNAPSHOT</version>
     </parent>
 
-    <artifactId>oid4vp-dcql</artifactId>
+    <artifactId>oid4vc-dcql</artifactId>
     <name>Nessus OID4VP :: DCQL</name>
 
     <dependencies>

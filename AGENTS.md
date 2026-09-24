@@ -1,5 +1,10 @@
 # Repository instructions
 
+## Specification context
+
+This project implements
+[OpenID for Verifiable Credential Issuance (OID4VCI) 1.0](https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html).
+
 ## Working agreement
 
 ### Collaboration and verification
