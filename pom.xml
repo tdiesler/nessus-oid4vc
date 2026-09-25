@@ -17,6 +17,7 @@
         <module>mapper</module>
         <module>cli</module>
         <module>demo/airport/ticket</module>
+        <module>demo/airport/checkin</module>
     </modules>
 
     <properties>

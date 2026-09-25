@@ -11,6 +11,7 @@
 //SOURCES LoginCmd.java
 //SOURCES LogoutCmd.java
 //SOURCES VcCmd.java
+//SOURCES VpCmd.java
 //SOURCES WalletState.java
 
 package io.nessus.oid4vc.cli;
@@ -39,7 +40,8 @@ import java.time.Instant;
         KeyCmd.class,
         LoginCmd.class,
         LogoutCmd.class,
-        VcCmd.class
+        VcCmd.class,
+        VpCmd.class
     })
 public class RootCmd implements Runnable {
 

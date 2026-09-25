@@ -1,0 +1,51 @@
+{{- with .Values.deployments.checkin }}
+---
+
+# Checkin Service Deployment
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: checkin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: checkin
+  template:
+    metadata:
+      annotations:
+        rollme: {{ $.Release.Revision | quote }}
+      labels:
+        app.kubernetes.io/name: checkin
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/release: {{ $.Release.Name }}
+    spec:
+      containers:
+        - name: checkin
+          image: {{ .image }}:{{ .version }}
+          imagePullPolicy: {{ .pullPolicy }}
+          ports:
+            - containerPort: 18090
+          readinessProbe:
+            tcpSocket:
+              port: 18090
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+
+# Checkin Service
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: checkin
+spec:
+  type: NodePort
+  ports:
+    - port: 18090
+      nodePort: {{ .nodePort }}
+  selector:
+    app.kubernetes.io/name: checkin
+---
+{{- end }}

@@ -7,6 +7,7 @@ build:
 
 images: build
 	docker build -t nessus/oid4vc-demo-ticket:1.0.0-SNAPSHOT demo/airport/ticket
+	docker build -t nessus/oid4vc-demo-checkin:1.0.0-SNAPSHOT demo/airport/checkin
 
 keycloak-login:
 	$(eval KC_ADMIN_PASSWORD := $(shell $(KUBECTL) get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d))

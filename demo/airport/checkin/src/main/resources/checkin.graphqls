@@ -1,0 +1,12 @@
+type Query {
+    boardingPass(passengerId: String!): BoardingPass
+}
+
+type BoardingPass {
+    passengerName: String
+    flightNumber: String
+    seat: String
+    boardingGroup: String
+    departureDateTime: String
+    gate: String
+}

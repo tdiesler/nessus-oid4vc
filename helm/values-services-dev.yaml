@@ -32,3 +32,11 @@ deployments:
     version: "1.0.0-SNAPSHOT"
     nodePort: 30100
     pullPolicy: IfNotPresent
+
+  # Checkin Service
+  #
+  checkin:
+    image: "nessus/oid4vc-demo-checkin"
+    version: "1.0.0-SNAPSHOT"
+    nodePort: 30200
+    pullPolicy: IfNotPresent

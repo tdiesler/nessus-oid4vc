@@ -89,6 +89,44 @@ RESULT=$(kcadm create client-scopes -o -r "${REALM}" \
   ]')
 if ${VERBOSE}; then echo "${RESULT}"; fi
 
+# Create Boarding Pass Scope with GraphQL protocol mapper
+#
+echo "Creating client scope 'oid4vc_boarding_pass_jwt' ..."
+RESULT=$(kcadm create client-scopes -o -r "${REALM}" \
+  -s name="oid4vc_boarding_pass_jwt" \
+  -s protocol="oid4vc" \
+  -s attributes='{
+    "vc.format": "jwt_vc_json",
+    "vc.binding_required": "true",
+    "vc.binding_required_proof_types": "jwt,attestation",
+    "vc.cryptographic_binding_methods_supported": "jwk",
+    "vc.verifiable_credential_type": "BoardingPassCredential"
+  }' \
+  -s protocolMappers='[
+    {
+      "name": "subject-id",
+      "protocol": "oid4vc",
+      "protocolMapper": "oid4vc-subject-id-mapper",
+      "config": {
+        "claim.name": "id",
+        "userAttribute": "username"
+      }
+    },
+    {
+      "name": "boarding-pass",
+      "protocol": "oid4vc",
+      "protocolMapper": "oid4vc-graphql-claim-mapper",
+      "config": {
+        "claim.name": "boarding-pass",
+        "graphqlEndpoint": "http://checkin:18090/graphql",
+        "graphqlQuery": "query($id: String!) { boardingPass(passengerId: $id) { passengerName flightNumber seat boardingGroup departureDateTime gate } }",
+        "graphqlVariableMapping": "id=username",
+        "responsePath": "boardingPass"
+      }
+    }
+  ]')
+if ${VERBOSE}; then echo "${RESULT}"; fi
+
 # Create OID4VCI Client
 #
 echo "Creating client 'oid4vci-client' ..."
@@ -98,7 +136,7 @@ RESULT=$(kcadm create clients -o -r "${REALM}" \
   -s publicClient="true" \
   -s directAccessGrantsEnabled="true" \
   -s 'redirectUris=["urn:ietf:wg:oauth:2.0:oob","https://oauth.pstmn.io/v1/callback"]' \
-  -s 'optionalClientScopes=["oid4vc_natural_person_sd","oid4vc_natural_person_jwt","oid4vc_airline_ticket_jwt"]' \
+  -s 'optionalClientScopes=["oid4vc_natural_person_sd","oid4vc_natural_person_jwt","oid4vc_airline_ticket_jwt","oid4vc_boarding_pass_jwt"]' \
   -s 'attributes={"oid4vci.enabled":"true"}')
 if ${VERBOSE}; then echo "${RESULT}"; fi
 
@@ -129,7 +167,7 @@ RESULT=$(kcadm create users -i -r "${REALM}" \
   -s credentials='[{"type":"password","value":"password","temporary":false}]')
 ALICE_ID="${RESULT}"
 
-for scope in oid4vc_natural_person_sd oid4vc_natural_person_jwt oid4vc_airline_ticket_jwt; do
+for scope in oid4vc_natural_person_sd oid4vc_natural_person_jwt oid4vc_airline_ticket_jwt oid4vc_boarding_pass_jwt; do
   echo "Assigning VC scope '${scope}' to user 'alice' ..."
   kcadm create "users/${ALICE_ID}/vc/credentials" -r "${REALM}" \
     -s "credentialScopeName=${scope}"
