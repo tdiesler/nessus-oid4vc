@@ -60,7 +60,8 @@ RESULT=$(kcadm create client-scopes -o -r "${REALM}" \
   -s attributes='{
     "vc.format": "jwt_vc_json",
     "vc.binding_required": "true",
-    "vc.binding_required_proof_types": "jwt",
+    "vc.binding_required_proof_types": "jwt,attestation",
+    "vc.cryptographic_binding_methods_supported": "jwk",
     "vc.verifiable_credential_type": "AirlineTicketCredential"
   }' \
   -s protocolMappers='[
