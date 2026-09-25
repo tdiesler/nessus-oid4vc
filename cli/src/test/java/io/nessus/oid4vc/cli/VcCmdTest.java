@@ -39,7 +39,7 @@ class VcCmdTest extends AbstractCmdTest {
         assumeTrue(walletExists, "Run oid4vc-setup first");
 
         var scope = "oid4vc_natural_person_jwt";
-        var login = cli("login", "--realm", DEFAULT_REALM, "--client-id", "oid4vci-client",
+        var login = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
                 "--user", "alice", "--password", "password", "--scope", scope);
         assertEquals(0, login.exitCode(), login.stderr());
 

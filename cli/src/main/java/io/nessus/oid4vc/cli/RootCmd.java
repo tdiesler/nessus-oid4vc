@@ -45,7 +45,7 @@ import java.time.Instant;
     })
 public class RootCmd implements Runnable {
 
-    @Option(names = "--verbose", scope = CommandLine.ScopeType.INHERIT, description = "Show request/response details")
+    @Option(names = {"-v", "--verbose"}, scope = CommandLine.ScopeType.INHERIT, description = "Show request/response details")
     static boolean verbose;
 
     static final Path WALLET_DIR = Path.of(".config");
@@ -53,7 +53,8 @@ public class RootCmd implements Runnable {
     static final ObjectMapper MAPPER = new ObjectMapper()
         .setSerializationInclusion(JsonInclude.Include.NON_NULL)
         .enable(SerializationFeature.INDENT_OUTPUT);
-    static final HttpClient HTTP = HttpClient.newHttpClient();
+    static final HttpClient HTTP = HttpClient.newBuilder()
+        .followRedirects(HttpClient.Redirect.NORMAL).build();
 
     public static void main(String[] args) {
         int exitCode = new CommandLine(new RootCmd()).execute(args);

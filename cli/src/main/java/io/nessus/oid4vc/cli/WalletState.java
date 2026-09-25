@@ -9,6 +9,7 @@ class WalletState {
     public Map<String, WalletState.RealmState> realms;
 
     static class RealmState {
+        public String defaultClient;
         public String defaultUser;
         public Map<String, WalletState.Connection> users;
     }

@@ -135,9 +135,19 @@ RESULT=$(kcadm create clients -o -r "${REALM}" \
   -s clientId="oid4vci-client" \
   -s publicClient="true" \
   -s directAccessGrantsEnabled="true" \
-  -s 'redirectUris=["urn:ietf:wg:oauth:2.0:oob","https://oauth.pstmn.io/v1/callback"]' \
-  -s 'optionalClientScopes=["oid4vc_natural_person_sd","oid4vc_natural_person_jwt","oid4vc_airline_ticket_jwt","oid4vc_boarding_pass_jwt"]' \
-  -s 'attributes={"oid4vci.enabled":"true"}')
+  -s redirectUris='[
+    "urn:ietf:wg:oauth:2.0:oob",
+    "http://localhost:18888/callback",
+    "https://oauth.pstmn.io/v1/callback"
+    ]' \
+  -s optionalClientScopes='[
+    "profile",
+    "oid4vc_natural_person_sd",
+    "oid4vc_natural_person_jwt",
+    "oid4vc_airline_ticket_jwt",
+    "oid4vc_boarding_pass_jwt"
+    ]' \
+  -s attributes='{"oid4vci.enabled":"true"}')
 if ${VERBOSE}; then echo "${RESULT}"; fi
 
 # Create Users
@@ -176,7 +186,7 @@ done
 # Configure wallet defaults
 #
 rm -f .config/wallet.json
-${OID4VC} ${OID4VC_VERBOSE} config --server "http://localhost:30800" --realm "${REALM}"
+${OID4VC} ${OID4VC_VERBOSE} config --server "http://localhost:30800" --realm "${REALM}" --client "oid4vci-client"
 
 # Holder Key
 #
@@ -185,7 +195,7 @@ ${OID4VC} ${OID4VC_VERBOSE} key create --user "alice" --algo "ES256"
 # Holder Login & Credential (JWT)
 #
 scope="oid4vc_natural_person_jwt"
-${OID4VC} ${OID4VC_VERBOSE} login --realm "${REALM}" --client-id "oid4vci-client" --user "alice" --password "password" --scope "${scope}"
+${OID4VC} ${OID4VC_VERBOSE} login --realm "${REALM}" --client "oid4vci-client" --user "alice" --password "password" --scope "${scope}"
 vc_jwt=$(${OID4VC} ${OID4VC_VERBOSE} vc get --credential-id "${scope}_0000")
 echo "Credential: ${vc_jwt}"
 decode_vc "${vc_jwt}"
