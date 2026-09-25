@@ -92,8 +92,7 @@ public class OID4VCGraphQLClaimMapper extends OID4VCMapper {
         var responsePath = config.get(RESPONSE_PATH);
 
         if (endpoint == null || query == null) {
-            LOG.warn("GraphQL mapper misconfigured: endpoint or query missing");
-            return;
+            throw new RuntimeException("GraphQL mapper misconfigured: endpoint or query missing");
         }
 
         try {
@@ -102,8 +101,7 @@ public class OID4VCGraphQLClaimMapper extends OID4VCMapper {
 
             var node = navigatePath(responseData, responsePath);
             if (node == null) {
-                LOG.warnf("No data at response path '%s'", responsePath);
-                return;
+                throw new RuntimeException("No data at response path '" + responsePath + "' from endpoint '" + endpoint + "'");
             }
 
             if (node.isObject()) {
@@ -115,8 +113,10 @@ public class OID4VCGraphQLClaimMapper extends OID4VCMapper {
             } else {
                 claims.put(claimName, unwrap(node));
             }
+        } catch (RuntimeException ex) {
+            throw ex;
         } catch (Exception ex) {
-            LOG.errorf(ex, "GraphQL claim mapper failed for endpoint '%s'", endpoint);
+            throw new RuntimeException("GraphQL claim mapper failed for endpoint '" + endpoint + "'", ex);
         }
     }
 

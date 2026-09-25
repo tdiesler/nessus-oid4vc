@@ -129,9 +129,8 @@ class OID4VCGraphQLClaimMapperTest {
         var session = mock(UserSessionModel.class);
 
         var claims = new HashMap<String, Object>();
-        mapper.setClaim(claims, session);
-
-        assertTrue(claims.isEmpty());
+        var ex = assertThrows(RuntimeException.class, () -> mapper.setClaim(claims, session));
+        assertTrue(ex.getMessage().contains("GraphQL errors:"));
     }
 
     @Test
@@ -148,8 +147,7 @@ class OID4VCGraphQLClaimMapperTest {
         var session = mock(UserSessionModel.class);
 
         var claims = new HashMap<String, Object>();
-        mapper.setClaim(claims, session);
-
-        assertTrue(claims.isEmpty());
+        var ex = assertThrows(RuntimeException.class, () -> mapper.setClaim(claims, session));
+        assertTrue(ex.getMessage().contains("misconfigured"));
     }
 }

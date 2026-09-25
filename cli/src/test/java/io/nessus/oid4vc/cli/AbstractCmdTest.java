@@ -1,6 +1,7 @@
 package io.nessus.oid4vc.cli;
 
 import jakarta.annotation.Nonnull;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 
 import java.net.HttpURLConnection;
@@ -21,13 +22,27 @@ class AbstractCmdTest {
     static boolean keycloakAvailable;
     static boolean realmAvailable;
 
+    private static byte[] walletSnapshot;
+
     @BeforeAll
     static void checkPrerequisites() {
         projectRoot = findProjectRoot();
         walletFile = projectRoot.resolve(".config/wallet.json");
         walletExists = Files.exists(walletFile);
+        if (walletExists) {
+            try { walletSnapshot = Files.readAllBytes(walletFile); }
+            catch (Exception e) { walletSnapshot = null; }
+        }
         keycloakAvailable = checkKeycloak();
         realmAvailable = keycloakAvailable && checkRealm(DEFAULT_REALM);
+    }
+
+    @AfterAll
+    static void restoreWallet() {
+        if (walletSnapshot != null) {
+            try { Files.write(walletFile, walletSnapshot); }
+            catch (Exception e) { /* best effort */ }
+        }
     }
 
     private static boolean checkKeycloak() {
