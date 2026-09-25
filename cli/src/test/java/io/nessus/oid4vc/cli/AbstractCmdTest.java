@@ -1,11 +1,8 @@
 package io.nessus.oid4vc.cli;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.BeforeAll;
 
-import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.file.Files;
@@ -15,30 +12,45 @@ import java.util.Arrays;
 
 class AbstractCmdTest {
 
-    static final ObjectMapper MAPPER = new ObjectMapper();
+    static final String DEFAULT_REALM = "oid4vci";
+    static final String SERVER_URL = "http://localhost:30800";
 
     static Path projectRoot;
     static Path walletFile;
     static boolean walletExists;
     static boolean keycloakAvailable;
+    static boolean realmAvailable;
 
     @BeforeAll
     static void checkPrerequisites() {
         projectRoot = findProjectRoot();
         walletFile = projectRoot.resolve(".config/wallet.json");
         walletExists = Files.exists(walletFile);
-        if (walletExists) {
-            try {
-                JsonNode wallet = MAPPER.readTree(walletFile.toFile());
-                String serverUrl = wallet.at("/serverUrl").asText();
-                var conn = (HttpURLConnection) URI.create(serverUrl).toURL().openConnection();
-                conn.setConnectTimeout(2000);
-                conn.setReadTimeout(2000);
-                conn.connect();
-                keycloakAvailable = true;
-            } catch (Exception e) {
-                keycloakAvailable = false;
-            }
+        keycloakAvailable = checkKeycloak();
+        realmAvailable = keycloakAvailable && checkRealm(DEFAULT_REALM);
+    }
+
+    private static boolean checkKeycloak() {
+        try {
+            var conn = (HttpURLConnection) URI.create(SERVER_URL).toURL().openConnection();
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(2000);
+            conn.connect();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean checkRealm(String realm) {
+        try {
+            var url = SERVER_URL + "/realms/" + realm + "/.well-known/openid-configuration";
+            var conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
+            conn.setConnectTimeout(2000);
+            conn.setReadTimeout(2000);
+            return conn.getResponseCode() == 200;
+        } catch (Exception e) {
+            return false;
         }
     }
 
@@ -54,21 +66,18 @@ class AbstractCmdTest {
     }
 
     @Nonnull
-    String getJwksUrl(String realm) throws IOException {
-        String realmUrl = getRealmUrl(realm);
-        return realmUrl + "/protocol/openid-connect/certs";
+    String getServerUrl() {
+        return SERVER_URL;
     }
 
     @Nonnull
-    String getRealmUrl(String realm) throws IOException {
-        var serverUrl = getServerUrl();
-        return serverUrl + "/realms/" + realm;
+    String getRealmUrl(String realm) {
+        return getServerUrl() + "/realms/" + realm;
     }
 
     @Nonnull
-    String getServerUrl() throws IOException {
-        var wallet = MAPPER.readTree(walletFile.toFile());
-        return wallet.at("/serverUrl").asText();
+    String getJwksUrl(String realm) {
+        return getRealmUrl(realm) + "/protocol/openid-connect/certs";
     }
 
     record CliResult(int exitCode, String stdout, String stderr) {}

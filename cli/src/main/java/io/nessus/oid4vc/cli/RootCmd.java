@@ -1,20 +1,15 @@
 ///usr/bin/env jbang "$0" "$@" ; exit $?
 
 //DEPS info.picocli:picocli:4.7.6
-// Keep keycloak-client version aligned with pom.xml (from github.com/keycloak/keycloak-client)
-//DEPS org.keycloak:keycloak-admin-client:26.0.12
 //DEPS com.fasterxml.jackson.core:jackson-databind:2.17.0
 //DEPS com.nimbusds:nimbus-jose-jwt:9.37.3
 //DEPS com.microsoft.playwright:playwright:1.44.0
 
-//SOURCES ClientCmd.java
-//SOURCES ClientScopeCmd.java
+//SOURCES ConfigCmd.java
 //SOURCES DemoCmd.java
 //SOURCES KeyCmd.java
 //SOURCES LoginCmd.java
 //SOURCES LogoutCmd.java
-//SOURCES RealmCmd.java
-//SOURCES UserCmd.java
 //SOURCES VcCmd.java
 //SOURCES WalletState.java
 
@@ -23,12 +18,6 @@ package io.nessus.oid4vc.cli;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
-import jakarta.ws.rs.client.ClientRequestFilter;
-import jakarta.ws.rs.client.ClientResponseFilter;
-import jakarta.ws.rs.WebApplicationException;
-import org.keycloak.admin.client.Keycloak;
-import org.keycloak.admin.client.KeycloakBuilder;
-import org.keycloak.admin.client.spi.ResteasyClientClassicProvider;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -45,14 +34,11 @@ import java.time.Instant;
 
 @Command(name = "oid4vc", mixinStandardHelpOptions = true,
     subcommands = {
-        ClientCmd.class,
-        ClientScopeCmd.class,
+        ConfigCmd.class,
         DemoCmd.class,
         KeyCmd.class,
         LoginCmd.class,
         LogoutCmd.class,
-        RealmCmd.class,
-        UserCmd.class,
         VcCmd.class
     })
 public class RootCmd implements Runnable {
@@ -76,42 +62,6 @@ public class RootCmd implements Runnable {
     @Override
     public void run() {
         CommandLine.usage(this, System.out);
-    }
-
-    static Keycloak adminClient() {
-        var wallet = loadWallet();
-        var conn = resolveConnection(wallet, "master", null);
-
-        if (Instant.parse(conn.expiresAt).minusSeconds(30).isBefore(Instant.now())) {
-            try {
-                refreshAccessToken(wallet.serverUrl, "master", conn);
-                saveWallet(wallet);
-            } catch (Exception ex) {
-                throw new RuntimeException(ex.getMessage(), ex);
-            }
-        }
-
-        var clientBuilder = ResteasyClientClassicProvider.createClientBuilder();
-        var client = clientBuilder.build();
-        if (verbose) {
-            client.register((ClientRequestFilter) ctx -> {
-                System.out.println(ctx.getMethod() + " " + ctx.getUri());
-                if (ctx.hasEntity()) {
-                    try { System.out.println(MAPPER.writeValueAsString(ctx.getEntity())); }
-                    catch (Exception ignored) {}
-                }
-            });
-            client.register((ClientResponseFilter) (req, resp) ->
-                System.out.println("Response: " + resp.getStatus()));
-        }
-
-        return KeycloakBuilder.builder()
-            .serverUrl(wallet.serverUrl)
-            .realm("master")
-            .clientId(conn.clientId != null ? conn.clientId : "admin-cli")
-            .authorization("Bearer " + conn.accessToken)
-            .resteasyClient(client)
-            .build();
     }
 
     static WalletState.Connection resolveWalletEntry(WalletState wallet, String realm, String user) {
@@ -145,17 +95,6 @@ public class RootCmd implements Runnable {
             return realmState.users.get(resolvedUser);
         }
         return realmState.users.values().iterator().next();
-    }
-
-    static String formatError(String context, Exception ex) {
-        if (ex instanceof WebApplicationException wae) {
-            var response = wae.getResponse();
-            var status = response.getStatus();
-            var body = "";
-            try { body = response.readEntity(String.class); } catch (Exception ignored) {}
-            return context + ": HTTP " + status + (body.isEmpty() ? "" : " - " + body);
-        }
-        return context + ": " + ex.getMessage();
     }
 
     static HttpResponse<String> httpPost(String url, String body, String contentType, String bearerToken) throws Exception {

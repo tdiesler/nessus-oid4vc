@@ -12,6 +12,6 @@ class RootCmdTest extends AbstractCmdTest {
         var result = cli("--help");
         assertEquals(0, result.exitCode());
         assertTrue(result.stdout().contains("login"), result.stdout());
-        assertTrue(result.stdout().contains("realm"), result.stdout());
+        assertTrue(result.stdout().contains("config"), result.stdout());
     }
 }

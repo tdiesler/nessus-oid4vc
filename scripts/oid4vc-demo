@@ -3,7 +3,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-OID4VC="${SCRIPT_DIR}/oid4vc"
+OID4VC="${SCRIPT_DIR}/../bin/oid4vc"
 source "${SCRIPT_DIR}/oid4vc-functions"
 
 VERBOSE=""

@@ -1,0 +1,154 @@
+#!/bin/bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+OID4VC="${SCRIPT_DIR}/../bin/oid4vc"
+source "${SCRIPT_DIR}/oid4vc-functions"
+
+VERBOSE=false
+OID4VC_VERBOSE=""
+REALM="oid4vci"
+for arg in "$@"; do
+  case "${arg}" in
+    --verbose) VERBOSE=true; OID4VC_VERBOSE="--verbose" ;;
+    *) REALM="${arg}" ;;
+  esac
+done
+
+# Keycloak Admin Login (kcadm)
+#
+echo "Logging into Keycloak as admin ..."
+KC_ADMIN_PASSWORD="$(kubectl --context=rancher-desktop get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d)"
+kcadm config credentials --server http://localhost:30800 --realm master --user admin --password "${KC_ADMIN_PASSWORD}" >/dev/null
+
+# Delete OID4VCI Realm
+#
+echo "Deleting realm '${REALM}' ..."
+kcadm delete "realms/${REALM}" >/dev/null 2>&1 || true
+
+# Create OID4VCI Realm
+#
+echo "Creating realm '${REALM}' ..."
+RESULT=$(kcadm create realms -o -s realm="${REALM}" \
+  -s verifiableCredentialsEnabled="true" \
+  -s enabled="true")
+if ${VERBOSE}; then echo "${RESULT}"; fi
+
+# Create Realm Keys
+#
+echo "Creating ES256 signing key in realm '${REALM}' ..."
+RESULT=$(kcadm create components -o -r "${REALM}" \
+  -s name="es256-vc-signing" \
+  -s providerType="org.keycloak.keys.KeyProvider" \
+  -s providerId="ecdsa-generated")
+if ${VERBOSE}; then echo "${RESULT}"; fi
+
+echo "Creating ECDH-ES encryption key in realm '${REALM}' ..."
+RESULT=$(kcadm create components -o -r "${REALM}" \
+  -s name="ecdh-vc-encryption" \
+  -s providerType="org.keycloak.keys.KeyProvider" \
+  -s providerId="ecdh-generated")
+if ${VERBOSE}; then echo "${RESULT}"; fi
+
+# Create Airline Ticket Scope with GraphQL protocol mapper
+#
+echo "Creating client scope 'oid4vc_airline_ticket_jwt' ..."
+RESULT=$(kcadm create client-scopes -o -r "${REALM}" \
+  -s name="oid4vc_airline_ticket_jwt" \
+  -s protocol="oid4vc" \
+  -s attributes='{
+    "vc.format": "jwt_vc_json",
+    "vc.binding_required": "true",
+    "vc.binding_required_proof_types": "jwt",
+    "vc.verifiable_credential_type": "AirlineTicketCredential"
+  }' \
+  -s protocolMappers='[
+    {
+      "name": "subject-id",
+      "protocol": "oid4vc",
+      "protocolMapper": "oid4vc-subject-id-mapper",
+      "config": {
+        "claim.name": "id",
+        "userAttribute": "username"
+      }
+    },
+    {
+      "name": "airline-ticket",
+      "protocol": "oid4vc",
+      "protocolMapper": "oid4vc-graphql-claim-mapper",
+      "config": {
+        "claim.name": "airline-ticket",
+        "graphqlEndpoint": "http://ticket:18080/graphql",
+        "graphqlQuery": "query($id: String!) { booking(passengerId: $id) { flightNumber route departureDateTime bookingReference passengerName } }",
+        "graphqlVariableMapping": "id=username",
+        "responsePath": "booking"
+      }
+    }
+  ]')
+if ${VERBOSE}; then echo "${RESULT}"; fi
+
+# Create OID4VCI Client
+#
+echo "Creating client 'oid4vci-client' ..."
+RESULT=$(kcadm create clients -o -r "${REALM}" \
+  -s name="OID4VCI Client" \
+  -s clientId="oid4vci-client" \
+  -s publicClient="true" \
+  -s directAccessGrantsEnabled="true" \
+  -s 'redirectUris=["urn:ietf:wg:oauth:2.0:oob","https://oauth.pstmn.io/v1/callback"]' \
+  -s 'optionalClientScopes=["oid4vc_natural_person_sd","oid4vc_natural_person_jwt","oid4vc_airline_ticket_jwt"]' \
+  -s 'attributes={"oid4vci.enabled":"true"}')
+if ${VERBOSE}; then echo "${RESULT}"; fi
+
+# Create Users
+#
+echo "Creating user 'max' ..."
+RESULT=$(kcadm create users -i -r "${REALM}" \
+  -s username="max" \
+  -s firstName="Max" \
+  -s lastName="Mustermann" \
+  -s email="user@email.com" \
+  -s emailVerified="true" \
+  -s enabled="true" \
+  -s credentials='[{"type":"password","value":"password","temporary":false}]')
+MAX_ID="${RESULT}"
+
+echo "Assigning role 'credential-offer-create' to user 'max' ..."
+kcadm add-roles -r "${REALM}" --uusername "max" --rolename "credential-offer-create"
+
+echo "Creating user 'alice' ..."
+RESULT=$(kcadm create users -i -r "${REALM}" \
+  -s username="alice" \
+  -s firstName="Alice" \
+  -s lastName="Wonderland" \
+  -s email="alice@email.com" \
+  -s emailVerified="true" \
+  -s enabled="true" \
+  -s credentials='[{"type":"password","value":"password","temporary":false}]')
+ALICE_ID="${RESULT}"
+
+for scope in oid4vc_natural_person_sd oid4vc_natural_person_jwt oid4vc_airline_ticket_jwt; do
+  echo "Assigning VC scope '${scope}' to user 'alice' ..."
+  kcadm create "users/${ALICE_ID}/vc/credentials" -r "${REALM}" \
+    -s "credentialScopeName=${scope}"
+done
+
+# Configure wallet defaults
+#
+rm -f .config/wallet.json
+${OID4VC} ${OID4VC_VERBOSE} config --server "http://localhost:30800" --realm "${REALM}"
+
+# Holder Key
+#
+${OID4VC} ${OID4VC_VERBOSE} key create --user "alice" --algo "ES256"
+
+# Holder Login & Credential (JWT)
+#
+scope="oid4vc_natural_person_jwt"
+${OID4VC} ${OID4VC_VERBOSE} login --realm "${REALM}" --client-id "oid4vci-client" --user "alice" --password "password" --scope "${scope}"
+vc_jwt=$(${OID4VC} ${OID4VC_VERBOSE} vc get --credential-id "${scope}_0000")
+echo "Credential: ${vc_jwt}"
+decode_vc "${vc_jwt}"
+
+echo "Realm setup complete"
