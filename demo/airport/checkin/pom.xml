@@ -34,7 +34,7 @@
     <dependencies>
         <dependency>
             <groupId>io.nessus.oid4vc</groupId>
-            <artifactId>oid4vc-dcql</artifactId>
+            <artifactId>oid4vc-verifier</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>

@@ -6,6 +6,7 @@ import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.ECDSASigner;
 import com.nimbusds.jose.jwk.Curve;
+import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
@@ -33,14 +34,24 @@ class CheckinServiceTest {
     static final HttpClient HTTP = HttpClient.newHttpClient();
     static final ObjectMapper JSON = new ObjectMapper();
 
+    static final String TEST_ISSUER = "http://localhost:30800/realms/test";
+
     static CamelContext camelContext;
     static CheckinStore store;
+    static ECKey testKey;
 
     @BeforeAll
     static void startService() throws Exception {
+        testKey = new ECKeyGenerator(Curve.P_256).keyID("test-key").generate();
+
         store = new CheckinStore();
+        var routes = new CheckinRoutes(store, PORT);
+
+        var jwks = JSON.readTree("{\"keys\":[" + testKey.toPublicJWK().toJSONString() + "]}");
+        routes.jwtVerifier.preloadJwks(TEST_ISSUER, jwks);
+
         var ctx = new DefaultCamelContext();
-        ctx.addRoutes(new CheckinRoutes(store, PORT));
+        ctx.addRoutes(routes);
         ctx.start();
         camelContext = ctx;
     }
@@ -210,19 +221,18 @@ class CheckinServiceTest {
     }
 
     static String buildVcJwt(Map<String, Object> vcClaims) throws Exception {
-        var ecKey = new ECKeyGenerator(Curve.P_256).keyID("test-key").generate();
         var header = new JWSHeader.Builder(JWSAlgorithm.ES256)
                 .type(new JOSEObjectType("vc+jwt"))
-                .keyID(ecKey.getKeyID())
+                .keyID(testKey.getKeyID())
                 .build();
         var claims = new JWTClaimsSet.Builder()
-                .issuer("http://localhost:30800/realms/test")
+                .issuer(TEST_ISSUER)
                 .subject("alice")
                 .issueTime(new Date())
                 .claim("vc", vcClaims)
                 .build();
         var jwt = new SignedJWT(header, claims);
-        jwt.sign(new ECDSASigner(ecKey));
+        jwt.sign(new ECDSASigner(testKey));
         return jwt.serialize();
     }
 }

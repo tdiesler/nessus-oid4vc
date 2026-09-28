@@ -3,9 +3,11 @@ package io.nessus.oid4vc.demo.checkin;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jwt.SignedJWT;
-import io.nessus.oid4vc.dcql.DcqlEvaluator;
-import io.nessus.oid4vc.dcql.DcqlQuery;
-import io.nessus.oid4vc.dcql.JacksonSupport;
+import io.nessus.oid4vc.verifier.DcqlEvaluator;
+import io.nessus.oid4vc.verifier.DcqlQuery;
+import io.nessus.oid4vc.verifier.JacksonSupport;
+import io.nessus.oid4vc.verifier.VcJwtVerifier;
+import io.nessus.oid4vc.verifier.VcVerificationException;
 import io.nessus.oid4vc.model.VpToken;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
@@ -46,6 +48,7 @@ public class CheckinRoutes extends RouteBuilder {
     private final CheckinStore store;
     private final GraphQLHandler graphQLHandler;
     private final DcqlEvaluator evaluator = new DcqlEvaluator();
+    final VcJwtVerifier jwtVerifier = new VcJwtVerifier();
     private final int port;
 
     public CheckinRoutes(CheckinStore store, int port) {
@@ -141,6 +144,14 @@ public class CheckinRoutes extends RouteBuilder {
             var credId = entry.getKey();
             var vcJwt = entry.getValue().asText();
             var signedJwt = SignedJWT.parse(vcJwt);
+            try {
+                jwtVerifier.verify(signedJwt);
+            } catch (VcVerificationException ex) {
+                exchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
+                exchange.getIn().setBody("{\"status\":\"denied\",\"reason\":\"" + ex.getMessage().replace("\"", "'") + "\"}");
+                exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
+                return;
+            }
             var claims = JSON.readTree(signedJwt.getPayload().toString());
             vpTokenBuilder.addCredential(credId, claims);
         }
