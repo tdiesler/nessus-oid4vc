@@ -10,6 +10,8 @@ import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+
+import java.util.ArrayList;
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterAll;
@@ -38,16 +40,18 @@ class CheckinServiceTest {
 
     static CamelContext camelContext;
     static CheckinStore store;
-    static ECKey testKey;
+    static ECKey issuerKey;
+    static ECKey holderKey;
 
     @BeforeAll
     static void startService() throws Exception {
-        testKey = new ECKeyGenerator(Curve.P_256).keyID("test-key").generate();
+        issuerKey = new ECKeyGenerator(Curve.P_256).keyID("issuer-key").generate();
+        holderKey = new ECKeyGenerator(Curve.P_256).keyID("holder-key").generate();
 
         store = new CheckinStore();
         var routes = new CheckinRoutes(store, PORT);
 
-        var jwks = JSON.readTree("{\"keys\":[" + testKey.toPublicJWK().toJSONString() + "]}");
+        var jwks = JSON.readTree("{\"keys\":[" + issuerKey.toPublicJWK().toJSONString() + "]}");
         routes.jwtVerifier.preloadJwks(TEST_ISSUER, jwks);
 
         var ctx = new DefaultCamelContext();
@@ -85,7 +89,7 @@ class CheckinServiceTest {
 
     @Test
     void checkinResponseApproved() throws Exception {
-        var ticketJwt = buildVcJwt(Map.of(
+        var ticketVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_airline_ticket"),
                 "credentialSubject", Map.of(
                         "flightNumber", "BA123",
@@ -97,7 +101,7 @@ class CheckinServiceTest {
                 )
         ));
 
-        var personJwt = buildVcJwt(Map.of(
+        var personVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_natural_person"),
                 "credentialSubject", Map.of(
                         "firstName", "Alice",
@@ -108,8 +112,8 @@ class CheckinServiceTest {
         ));
 
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("airline_ticket", ticketJwt);
-        vpToken.put("natural_person", personJwt);
+        vpToken.put("airline_ticket", buildVpJwt(ticketVcJwt));
+        vpToken.put("natural_person", buildVpJwt(personVcJwt));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
@@ -137,7 +141,7 @@ class CheckinServiceTest {
 
     @Test
     void checkinResponseDeniedMissingCredential() throws Exception {
-        var personJwt = buildVcJwt(Map.of(
+        var personVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_natural_person"),
                 "credentialSubject", Map.of(
                         "firstName", "Alice",
@@ -147,7 +151,7 @@ class CheckinServiceTest {
         ));
 
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("natural_person", personJwt);
+        vpToken.put("natural_person", buildVpJwt(personVcJwt));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
@@ -223,7 +227,7 @@ class CheckinServiceTest {
     static String buildVcJwt(Map<String, Object> vcClaims) throws Exception {
         var header = new JWSHeader.Builder(JWSAlgorithm.ES256)
                 .type(new JOSEObjectType("vc+jwt"))
-                .keyID(testKey.getKeyID())
+                .keyID(issuerKey.getKeyID())
                 .build();
         var claims = new JWTClaimsSet.Builder()
                 .issuer(TEST_ISSUER)
@@ -232,7 +236,27 @@ class CheckinServiceTest {
                 .claim("vc", vcClaims)
                 .build();
         var jwt = new SignedJWT(header, claims);
-        jwt.sign(new ECDSASigner(testKey));
+        jwt.sign(new ECDSASigner(issuerKey));
+        return jwt.serialize();
+    }
+
+    static String buildVpJwt(String vcJwt) throws Exception {
+        var header = new JWSHeader.Builder(JWSAlgorithm.ES256)
+                .type(new JOSEObjectType("jwt"))
+                .jwk(holderKey.toPublicJWK())
+                .build();
+        var vp = new LinkedHashMap<String, Object>();
+        vp.put("@context", List.of("https://www.w3.org/2018/credentials/v1"));
+        vp.put("type", List.of("VerifiablePresentation"));
+        vp.put("verifiableCredential", List.of(vcJwt));
+        var claims = new JWTClaimsSet.Builder()
+                .audience(BASE + "/checkin")
+                .issueTime(new Date())
+                .claim("nonce", "test-nonce")
+                .claim("vp", vp)
+                .build();
+        var jwt = new SignedJWT(header, claims);
+        jwt.sign(new ECDSASigner(holderKey));
         return jwt.serialize();
     }
 }

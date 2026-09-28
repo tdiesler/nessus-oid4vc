@@ -37,14 +37,16 @@ class GateServiceTest {
     static final String TEST_ISSUER = "http://localhost:30800/realms/test";
 
     static CamelContext camelContext;
-    static ECKey testKey;
+    static ECKey issuerKey;
+    static ECKey holderKey;
 
     @BeforeAll
     static void startService() throws Exception {
-        testKey = new ECKeyGenerator(Curve.P_256).keyID("test-key").generate();
+        issuerKey = new ECKeyGenerator(Curve.P_256).keyID("issuer-key").generate();
+        holderKey = new ECKeyGenerator(Curve.P_256).keyID("holder-key").generate();
 
         var routes = new GateRoutes(PORT);
-        var jwks = JSON.readTree("{\"keys\":[" + testKey.toPublicJWK().toJSONString() + "]}");
+        var jwks = JSON.readTree("{\"keys\":[" + issuerKey.toPublicJWK().toJSONString() + "]}");
         routes.jwtVerifier.preloadJwks(TEST_ISSUER, jwks);
 
         var ctx = new DefaultCamelContext();
@@ -82,7 +84,7 @@ class GateServiceTest {
 
     @Test
     void gateResponseBoarded() throws Exception {
-        var boardingPassJwt = buildVcJwt(Map.of(
+        var boardingPassVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_boarding_pass"),
                 "credentialSubject", Map.of(
                         "passengerName", "Alice Wonderland",
@@ -95,7 +97,7 @@ class GateServiceTest {
                 )
         ));
 
-        var personJwt = buildVcJwt(Map.of(
+        var personVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_natural_person"),
                 "credentialSubject", Map.of(
                         "firstName", "Alice",
@@ -106,8 +108,8 @@ class GateServiceTest {
         ));
 
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("boarding_pass", boardingPassJwt);
-        vpToken.put("natural_person", personJwt);
+        vpToken.put("boarding_pass", buildVpJwt(boardingPassVcJwt));
+        vpToken.put("natural_person", buildVpJwt(personVcJwt));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
@@ -131,7 +133,7 @@ class GateServiceTest {
 
     @Test
     void gateResponseDeniedMissingCredential() throws Exception {
-        var personJwt = buildVcJwt(Map.of(
+        var personVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_natural_person"),
                 "credentialSubject", Map.of(
                         "firstName", "Alice",
@@ -141,7 +143,7 @@ class GateServiceTest {
         ));
 
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("natural_person", personJwt);
+        vpToken.put("natural_person", buildVpJwt(personVcJwt));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
@@ -175,7 +177,7 @@ class GateServiceTest {
     static String buildVcJwt(Map<String, Object> vcClaims) throws Exception {
         var header = new JWSHeader.Builder(JWSAlgorithm.ES256)
                 .type(new JOSEObjectType("vc+jwt"))
-                .keyID(testKey.getKeyID())
+                .keyID(issuerKey.getKeyID())
                 .build();
         var claims = new JWTClaimsSet.Builder()
                 .issuer(TEST_ISSUER)
@@ -184,7 +186,27 @@ class GateServiceTest {
                 .claim("vc", vcClaims)
                 .build();
         var jwt = new SignedJWT(header, claims);
-        jwt.sign(new ECDSASigner(testKey));
+        jwt.sign(new ECDSASigner(issuerKey));
+        return jwt.serialize();
+    }
+
+    static String buildVpJwt(String vcJwt) throws Exception {
+        var header = new JWSHeader.Builder(JWSAlgorithm.ES256)
+                .type(new JOSEObjectType("jwt"))
+                .jwk(holderKey.toPublicJWK())
+                .build();
+        var vp = new LinkedHashMap<String, Object>();
+        vp.put("@context", List.of("https://www.w3.org/2018/credentials/v1"));
+        vp.put("type", List.of("VerifiablePresentation"));
+        vp.put("verifiableCredential", List.of(vcJwt));
+        var claims = new JWTClaimsSet.Builder()
+                .audience(BASE + "/gate")
+                .issueTime(new Date())
+                .claim("nonce", "test-nonce")
+                .claim("vp", vp)
+                .build();
+        var jwt = new SignedJWT(header, claims);
+        jwt.sign(new ECDSASigner(holderKey));
         return jwt.serialize();
     }
 }

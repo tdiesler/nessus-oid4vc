@@ -200,13 +200,28 @@ class VcCmd implements Runnable {
                     return 1;
                 }
 
-                var vpToken = matchCredentials(dcqlQuery, conn.credentials);
-                if (vpToken.isEmpty()) {
+                var matchedVcs = matchCredentials(dcqlQuery, conn.credentials);
+                if (matchedVcs.isEmpty()) {
                     System.err.println("No matching credentials found for the verifier's query");
                     return 1;
                 }
 
-                if (verbose) System.out.println("Matched credentials: " + vpToken.keySet());
+                if (verbose) System.out.println("Matched credentials: " + matchedVcs.keySet());
+
+                if (conn.keys == null || conn.keys.isEmpty()) {
+                    System.err.println("No holder key. Run 'oid4vc key create --algo ES256' first.");
+                    return 1;
+                }
+                var kidStr = conn.defaultKey != null ? conn.defaultKey : (String) conn.keys.get(0).get("kid");
+                var holderKey = com.nimbusds.jose.jwk.ECKey.parse(
+                        conn.keys.stream().filter(k -> kidStr.equals(k.get("kid")))
+                                .findFirst().orElse(conn.keys.get(0)));
+
+                var vpToken = new LinkedHashMap<String, String>();
+                for (var entry : matchedVcs.entrySet()) {
+                    var vpJwt = buildVpJwt(entry.getValue(), holderKey, verifierUrl, nonce);
+                    vpToken.put(entry.getKey(), vpJwt);
+                }
 
                 var resolvedUser = user != null ? user : resolveDefaultUser(wallet, realmName);
                 var responseBody = new LinkedHashMap<String, Object>();
@@ -245,6 +260,26 @@ class VcCmd implements Runnable {
                 }
             }
             return matched;
+        }
+
+        private String buildVpJwt(String vcJwt, com.nimbusds.jose.jwk.ECKey holderKey,
+                String audience, String nonce) throws Exception {
+            var header = new JWSHeader.Builder(JWSAlgorithm.ES256)
+                    .type(new JOSEObjectType("jwt"))
+                    .jwk(holderKey.toPublicJWK())
+                    .build();
+            var vp = new LinkedHashMap<String, Object>();
+            vp.put("@context", List.of("https://www.w3.org/2018/credentials/v1"));
+            vp.put("type", List.of("VerifiablePresentation"));
+            vp.put("verifiableCredential", List.of(vcJwt));
+            var claimsBuilder = new JWTClaimsSet.Builder()
+                    .audience(audience)
+                    .issueTime(Date.from(Instant.now()))
+                    .claim("vp", vp);
+            if (nonce != null) claimsBuilder.claim("nonce", nonce);
+            var signedJwt = new SignedJWT(header, claimsBuilder.build());
+            signedJwt.sign(new ECDSASigner(holderKey));
+            return signedJwt.serialize();
         }
 
         private String resolveDefaultUser(WalletState wallet, String realm) {

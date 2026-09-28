@@ -2,6 +2,13 @@ package io.nessus.oid4vc.demo.itests;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.nimbusds.jose.JOSEObjectType;
+import com.nimbusds.jose.JWSAlgorithm;
+import com.nimbusds.jose.JWSHeader;
+import com.nimbusds.jose.crypto.ECDSASigner;
+import com.nimbusds.jose.jwk.ECKey;
+import com.nimbusds.jwt.JWTClaimsSet;
+import com.nimbusds.jwt.SignedJWT;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.MethodOrderer;
 import org.junit.jupiter.api.Order;
@@ -14,7 +21,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Date;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -33,6 +42,7 @@ class AirportDemoTest {
 
     static JsonNode wallet;
     static Map<String, String> credentials;
+    static ECKey holderKey;
 
     @BeforeAll
     static void checkEnvironment() throws Exception {
@@ -58,6 +68,10 @@ class AirportDemoTest {
         assumeTrue(findCredential("natural_person") != null, "No natural_person VC in wallet");
         assumeTrue(findCredential("airline_ticket") != null, "No airline_ticket VC in wallet");
         assumeTrue(findCredential("boarding_pass") != null, "No boarding_pass VC in wallet");
+
+        var keysNode = realmState.at("/users/" + defaultUser + "/keys");
+        assumeTrue(keysNode.isArray() && !keysNode.isEmpty(), "No holder keys in wallet");
+        holderKey = ECKey.parse(JSON.writeValueAsString(keysNode.get(0)));
     }
 
     @Test
@@ -86,8 +100,8 @@ class AirportDemoTest {
     @Order(2)
     void checkinWithTicketAndPassport() throws Exception {
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("airline_ticket", findCredential("airline_ticket"));
-        vpToken.put("natural_person", findCredential("natural_person"));
+        vpToken.put("airline_ticket", buildVpJwt(findCredential("airline_ticket"), CHECKIN_URL + "/checkin"));
+        vpToken.put("natural_person", buildVpJwt(findCredential("natural_person"), CHECKIN_URL + "/checkin"));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
@@ -115,8 +129,8 @@ class AirportDemoTest {
     @Order(3)
     void boardAtGateWithBoardingPassAndPassport() throws Exception {
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("boarding_pass", findCredential("boarding_pass"));
-        vpToken.put("natural_person", findCredential("natural_person"));
+        vpToken.put("boarding_pass", buildVpJwt(findCredential("boarding_pass"), GATE_URL + "/gate"));
+        vpToken.put("natural_person", buildVpJwt(findCredential("natural_person"), GATE_URL + "/gate"));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
@@ -136,6 +150,25 @@ class AirportDemoTest {
         assertNotNull(body.get("flight").asText());
         assertNotNull(body.get("seat").asText());
         assertNotNull(body.get("gate").asText());
+    }
+
+    static String buildVpJwt(String vcJwt, String audience) throws Exception {
+        var header = new JWSHeader.Builder(JWSAlgorithm.ES256)
+                .type(new JOSEObjectType("jwt"))
+                .jwk(holderKey.toPublicJWK())
+                .build();
+        var vp = new LinkedHashMap<String, Object>();
+        vp.put("@context", List.of("https://www.w3.org/2018/credentials/v1"));
+        vp.put("type", List.of("VerifiablePresentation"));
+        vp.put("verifiableCredential", List.of(vcJwt));
+        var claims = new JWTClaimsSet.Builder()
+                .audience(audience)
+                .issueTime(new Date())
+                .claim("vp", vp)
+                .build();
+        var jwt = new SignedJWT(header, claims);
+        jwt.sign(new ECDSASigner(holderKey));
+        return jwt.serialize();
     }
 
     static String findCredential(String type) {
