@@ -10,6 +10,7 @@
 //SOURCES KeyCmd.java
 //SOURCES LoginCmd.java
 //SOURCES LogoutCmd.java
+//SOURCES ShowCmd.java
 //SOURCES VcCmd.java
 //SOURCES VpCmd.java
 //SOURCES WalletState.java
@@ -40,6 +41,7 @@ import java.time.Instant;
         KeyCmd.class,
         LoginCmd.class,
         LogoutCmd.class,
+        ShowCmd.class,
         VcCmd.class,
         VpCmd.class
     })
@@ -98,6 +100,15 @@ public class RootCmd implements Runnable {
             return realmState.users.get(resolvedUser);
         }
         return realmState.users.values().iterator().next();
+    }
+
+    static HttpResponse<String> httpGet(String url, String bearerToken) throws Exception {
+        var builder = HttpRequest.newBuilder().uri(URI.create(url)).GET();
+        if (bearerToken != null) builder.header("Authorization", "Bearer " + bearerToken);
+        if (verbose) System.out.println("GET " + url);
+        var response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
+        if (verbose) System.out.println("Response: " + response.statusCode());
+        return response;
     }
 
     static HttpResponse<String> httpPost(String url, String body, String contentType, String bearerToken) throws Exception {
