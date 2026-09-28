@@ -18,6 +18,7 @@
         <module>cli</module>
         <module>demo/airport/ticket</module>
         <module>demo/airport/checkin</module>
+        <module>demo/airport/gate</module>
     </modules>
 
     <properties>

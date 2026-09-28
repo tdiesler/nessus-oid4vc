@@ -8,7 +8,7 @@
         body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
         h1 { color: #333; }
         nav { margin-bottom: 20px; }
-        nav a { color: #0066cc; text-decoration: none; }
+        nav a { color: #0066cc; text-decoration: none; margin-right: 12px; }
         nav a:hover { text-decoration: underline; }
         label { display: block; margin-top: 12px; font-weight: bold; }
         textarea { width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; font-family: monospace; font-size: 14px; }
@@ -20,20 +20,21 @@
 <body>
     <nav>
         <a href="/">Home</a>
-        <a href="/bookings.html">Bookings</a>
+        <a href="/passes.html">Boarding Passes</a>
         <a href="/graphql.html">GraphQL</a>
-        | <a href="http://localhost:30200">Check-in</a>
+        | <a href="http://localhost:30100">Ticket</a>
     </nav>
     <h1>GraphQL Explorer</h1>
     <form id="graphqlForm">
         <label>Query
-            <textarea name="query" rows="9">query($id: String!) {
-  booking(passengerId: $id) {
-    flightNumber
-    route
-    departureDateTime
-    bookingReference
+            <textarea name="query" rows="10">query($id: String!) {
+  boardingPass(passengerId: $id) {
     passengerName
+    flightNumber
+    seat
+    boardingGroup
+    departureDateTime
+    gate
   }
 }</textarea>
         </label>

@@ -1,6 +1,5 @@
-package io.nessus.oid4vc.demo.checkin;
+package io.nessus.oid4vc.demo.gate;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jwt.SignedJWT;
 import io.nessus.oid4vc.dcql.DcqlEvaluator;
@@ -11,21 +10,23 @@ import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 
-public class CheckinRoutes extends RouteBuilder {
+public class GateRoutes extends RouteBuilder {
 
     static final String DCQL_QUERY = """
             {
               "credentials": [
                 {
-                  "id": "airline_ticket",
+                  "id": "boarding_pass",
                   "format": "jwt_vc_json",
                   "claims": [
-                    {"path": ["vc", "credentialSubject", "flightNumber"]},
                     {"path": ["vc", "credentialSubject", "passengerName"]},
-                    {"path": ["vc", "credentialSubject", "departureDateTime"]}
+                    {"path": ["vc", "credentialSubject", "flightNumber"]},
+                    {"path": ["vc", "credentialSubject", "seat"]},
+                    {"path": ["vc", "credentialSubject", "boardingGroup"]},
+                    {"path": ["vc", "credentialSubject", "departureDateTime"]},
+                    {"path": ["vc", "credentialSubject", "gate"]}
                   ]
                 },
                 {
@@ -43,64 +44,24 @@ public class CheckinRoutes extends RouteBuilder {
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final ObjectMapper DCQL_MAPPER = JacksonSupport.getMapper();
 
-    private final CheckinStore store;
-    private final GraphQLHandler graphQLHandler;
     private final DcqlEvaluator evaluator = new DcqlEvaluator();
     private final int port;
 
-    public CheckinRoutes(CheckinStore store, int port) {
-        this.store = store;
-        this.graphQLHandler = new GraphQLHandler(store);
+    public GateRoutes(int port) {
         this.port = port;
     }
 
     @Override
     public void configure() {
 
-        from("undertow:http://0.0.0.0:" + port + "/checkin?httpMethodRestrict=POST")
-                .process(this::handleCheckinRequest);
+        from("undertow:http://0.0.0.0:" + port + "/gate?httpMethodRestrict=POST")
+                .process(this::handleGateRequest);
 
-        from("undertow:http://0.0.0.0:" + port + "/checkin/response?httpMethodRestrict=POST")
-                .process(this::handleCheckinResponse);
-
-        from("undertow:http://0.0.0.0:" + port + "/graphql?httpMethodRestrict=POST")
-                .process(exchange -> {
-                    var body = exchange.getIn().getBody(String.class);
-                    var result = graphQLHandler.execute(body);
-                    exchange.getIn().setBody(result);
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
-                });
-
-        from("undertow:http://0.0.0.0:" + port + "/?httpMethodRestrict=GET")
-                .process(exchange -> serveResource(exchange, "webapp/index.html"));
-
-        from("undertow:http://0.0.0.0:" + port + "/passes.html?httpMethodRestrict=GET")
-                .process(exchange -> serveResource(exchange, "webapp/passes.html"));
-
-        from("undertow:http://0.0.0.0:" + port + "/graphql.html?httpMethodRestrict=GET")
-                .process(exchange -> serveResource(exchange, "webapp/graphql.html"));
-
-        from("undertow:http://0.0.0.0:" + port + "/api/passes?httpMethodRestrict=GET")
-                .process(exchange -> {
-                    exchange.getIn().setBody(JSON.writeValueAsString(store.getAllBoardingPasses()));
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
-                });
-
-        from("undertow:http://0.0.0.0:" + port + "/api/passes?httpMethodRestrict=DELETE")
-                .process(exchange -> {
-                    store.clear();
-                    exchange.getIn().setBody("{\"status\":\"cleared\"}");
-                    exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
-                });
+        from("undertow:http://0.0.0.0:" + port + "/gate/response?httpMethodRestrict=POST")
+                .process(this::handleGateResponse);
     }
 
-    private void serveResource(Exchange exchange, String path) {
-        var html = new String(getClass().getClassLoader().getResourceAsStream(path).readAllBytes());
-        exchange.getIn().setBody(html);
-        exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "text/html");
-    }
-
-    private void handleCheckinRequest(Exchange exchange) throws Exception {
+    private void handleGateRequest(Exchange exchange) throws Exception {
         var nonce = UUID.randomUUID().toString();
         var requestUrl = exchange.getIn().getHeader("CamelHttpUrl", String.class);
         var responseUri = requestUrl + "/response";
@@ -114,7 +75,7 @@ public class CheckinRoutes extends RouteBuilder {
         exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
     }
 
-    private void handleCheckinResponse(Exchange exchange) throws Exception {
+    private void handleGateResponse(Exchange exchange) throws Exception {
         var body = exchange.getIn().getBody(String.class);
         var request = JSON.readTree(body);
 
@@ -159,28 +120,20 @@ public class CheckinRoutes extends RouteBuilder {
             return;
         }
 
-        var ticketClaims = vpToken.getCredentials("airline_ticket").getFirst();
-        var ticket = ticketClaims.at("/vc/credentialSubject");
-        var personClaims = vpToken.getCredentials("natural_person").getFirst();
+        var boardingPassClaims = vpToken.getCredentials("boarding_pass").getFirst();
+        var bp = boardingPassClaims.at("/vc/credentialSubject");
 
+        var personClaims = vpToken.getCredentials("natural_person").getFirst();
         var firstName = personClaims.at("/vc/credentialSubject/firstName").asText("");
         var familyName = personClaims.at("/vc/credentialSubject/familyName").asText("");
         var passengerName = firstName + " " + familyName;
 
-        var boardingPass = new BoardingPass(
-                passengerName,
-                ticket.path("flightNumber").asText(),
-                "14A",
-                "B",
-                ticket.path("departureDateTime").asText(),
-                "G12"
-        );
-
-        store.putBoardingPass(passengerId, boardingPass);
-
         var response = new LinkedHashMap<String, Object>();
-        response.put("status", "approved");
-        response.put("boardingPass", boardingPass);
+        response.put("status", "boarded");
+        response.put("passenger", passengerName);
+        response.put("flight", bp.path("flightNumber").asText());
+        response.put("seat", bp.path("seat").asText());
+        response.put("gate", bp.path("gate").asText());
         exchange.getIn().setBody(JSON.writeValueAsString(response));
         exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
     }

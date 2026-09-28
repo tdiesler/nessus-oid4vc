@@ -7,11 +7,9 @@ OID4VC="${SCRIPT_DIR}/../bin/oid4vc"
 source "${SCRIPT_DIR}/oid4vc-functions"
 
 VERBOSE=""
-BROWSER=""
 REALM="oid4vci"
 for arg in "$@"; do
   case "${arg}" in
-    --browser) BROWSER="--browser" ;;
     --verbose) VERBOSE="--verbose" ;;
     *) REALM="${arg}" ;;
   esac
@@ -48,18 +46,10 @@ get_vc() {
 
   echo
   echo "  Step 1/2: Login as Alice with scope ${scope}"
-  if [[ -n "${BROWSER}" ]]; then
-    run_cmd ${OID4VC} ${VERBOSE} login \
-      --browser \
-      --scope "${scope}"
-  else
-    run_cmd ${OID4VC} ${VERBOSE} login \
-      --realm "${REALM}" \
-      --client "oid4vci-client" \
-      --user "alice" \
-      --password "password" \
-      --scope "${scope}"
-  fi
+  run_cmd ${OID4VC} ${VERBOSE} login \
+    --browser \
+    --user "alice" \
+    --scope "${scope}"
 
   echo
   echo "  Step 2/2: Request the ${label}"
@@ -105,6 +95,13 @@ do_boarding_pass() {
   get_vc "oid4vc_boarding_pass_jwt" "Boarding Pass Credential"
 }
 
+do_gate() {
+  echo
+  echo "  Present Boarding Pass + Passport to the gate verifier"
+  run_cmd ${OID4VC} ${VERBOSE} vp present \
+    --verifier "http://localhost:30300/gate"
+}
+
 next="1"
 
 while true; do
@@ -118,6 +115,7 @@ while true; do
   echo "  3 - Get the airline ticket credential"
   echo "  4 - Check in (verify ticket + passport)"
   echo "  5 - Get the boarding pass credential"
+  echo "  6 - Board at the gate (verify boarding pass + passport)"
   echo "  q - Quit"
   echo
   read -rp "  Choose an option [${next}]: " choice
@@ -128,7 +126,8 @@ while true; do
     2) do_booking; next="3" ;;
     3) do_ticket; next="4" ;;
     4) do_checkin; next="5" ;;
-    5) do_boarding_pass; next="q" ;;
+    5) do_boarding_pass; next="6" ;;
+    6) do_gate; next="q" ;;
     q|Q) echo; echo "  Bye."; break ;;
     *) echo "  Invalid option." ;;
   esac

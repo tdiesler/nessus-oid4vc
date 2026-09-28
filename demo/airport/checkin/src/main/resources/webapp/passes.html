@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bookings</title>
+    <title>Boarding Passes</title>
     <style>
         body { font-family: sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; }
         h1 { color: #333; }
         nav { margin-bottom: 20px; }
-        nav a { color: #0066cc; text-decoration: none; }
+        nav a { color: #0066cc; text-decoration: none; margin-right: 12px; }
         nav a:hover { text-decoration: underline; }
         table { width: 100%; border-collapse: collapse; margin-top: 12px; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
@@ -21,33 +21,34 @@
 <body>
     <nav>
         <a href="/">Home</a>
-        <a href="/bookings.html">Bookings</a>
+        <a href="/passes.html">Boarding Passes</a>
         <a href="/graphql.html">GraphQL</a>
-        | <a href="http://localhost:30200">Check-in</a>
+        | <a href="http://localhost:30100">Ticket</a>
     </nav>
-    <h1>Bookings</h1>
-    <table id="bookingsTable">
+    <h1>Boarding Passes</h1>
+    <table id="passesTable">
         <thead>
             <tr>
                 <th>Passenger ID</th>
                 <th>Passenger Name</th>
                 <th>Flight</th>
-                <th>Route</th>
+                <th>Seat</th>
+                <th>Group</th>
                 <th>Departure</th>
-                <th>Reference</th>
+                <th>Gate</th>
             </tr>
         </thead>
-        <tbody id="bookingsBody"></tbody>
+        <tbody id="passesBody"></tbody>
     </table>
-    <p id="empty" class="empty" style="display:none">No bookings found.</p>
-    <button id="clearBtn">Clear All Bookings</button>
+    <p id="empty" class="empty" style="display:none">No boarding passes found.</p>
+    <button id="clearBtn">Clear All</button>
     <script>
-        async function loadBookings() {
-            const resp = await fetch('/api/bookings');
+        async function loadPasses() {
+            const resp = await fetch('/api/passes');
             const data = await resp.json();
-            const tbody = document.getElementById('bookingsBody');
+            const tbody = document.getElementById('passesBody');
             const empty = document.getElementById('empty');
-            const table = document.getElementById('bookingsTable');
+            const table = document.getElementById('passesTable');
             tbody.innerHTML = '';
             const entries = Object.entries(data);
             if (entries.length === 0) {
@@ -56,18 +57,18 @@
             } else {
                 table.style.display = 'table';
                 empty.style.display = 'none';
-                for (const [pid, b] of entries) {
+                for (const [pid, bp] of entries) {
                     const row = document.createElement('tr');
-                    row.innerHTML = `<td>${pid}</td><td>${b.passengerName || ''}</td><td>${b.flightNumber || ''}</td><td>${b.route || ''}</td><td>${b.departureDateTime || ''}</td><td>${b.bookingReference || ''}</td>`;
+                    row.innerHTML = `<td>${pid}</td><td>${bp.passengerName || ''}</td><td>${bp.flightNumber || ''}</td><td>${bp.seat || ''}</td><td>${bp.boardingGroup || ''}</td><td>${bp.departureDateTime || ''}</td><td>${bp.gate || ''}</td>`;
                     tbody.appendChild(row);
                 }
             }
         }
         document.getElementById('clearBtn').addEventListener('click', async () => {
-            await fetch('/api/bookings', { method: 'DELETE' });
-            loadBookings();
+            await fetch('/api/passes', { method: 'DELETE' });
+            loadPasses();
         });
-        loadBookings();
+        loadPasses();
     </script>
 </body>
 </html>

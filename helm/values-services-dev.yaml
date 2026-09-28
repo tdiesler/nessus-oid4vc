@@ -40,3 +40,11 @@ deployments:
     version: "1.0.0-SNAPSHOT"
     nodePort: 30200
     pullPolicy: IfNotPresent
+
+  # Gate Service
+  #
+  gate:
+    image: "nessus/oid4vc-demo-gate"
+    version: "1.0.0-SNAPSHOT"
+    nodePort: 30300
+    pullPolicy: IfNotPresent

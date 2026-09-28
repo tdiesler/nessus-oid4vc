@@ -25,6 +25,28 @@ import static io.nessus.oid4vc.cli.RootCmd.*;
 @Command(name = "login", mixinStandardHelpOptions = true, description = "Authenticate with Keycloak")
 class LoginCmd implements Callable<Integer> {
 
+    private static final String PAGE_STYLE = """
+            <style>
+              body { margin:0; background:#2a2a2f; color:#e0e0e0; font-family:'Segoe UI',system-ui,sans-serif;
+                     display:flex; justify-content:center; align-items:center; min-height:100vh; }
+              .card { background:#36363e; border-radius:4px; padding:48px 40px; max-width:420px; width:100%;
+                      box-shadow:0 4px 24px rgba(0,0,0,0.4); border-top:3px solid #4d8cf5; text-align:center; }
+              h2 { margin:0 0 12px; font-weight:300; font-size:28px; letter-spacing:1px; }
+              p { color:#a0a0a0; font-size:15px; }
+            </style>""";
+
+    private static final String SUCCESS_PAGE = """
+            <html><head>%s</head><body><div class="card">
+            <h2>Login successful</h2><p>You can close this tab.</p>
+            </div></body></html>""".formatted(PAGE_STYLE);
+
+    private static String errorPage(String msg) {
+        return """
+                <html><head>%s</head><body><div class="card">
+                <h2>Login failed</h2><p>%s</p>
+                </div></body></html>""".formatted(PAGE_STYLE, msg);
+    }
+
     @Option(names = {"-b", "--browser"}, description = "Open system browser for login instead of headless Playwright")
     boolean browser;
 
@@ -206,11 +228,11 @@ class LoginCmd implements Callable<Integer> {
 
             String response;
             if (code != null) {
-                response = "<html><body><h2>Login successful</h2><p>You can close this tab.</p></body></html>";
+                response = SUCCESS_PAGE;
             } else {
                 var msg = error != null ? error : "unknown_error";
                 if (errorDesc != null) msg += ": " + errorDesc;
-                response = "<html><body><h2>Login failed</h2><p>" + msg + "</p></body></html>";
+                response = errorPage(msg);
             }
             var bytes = response.getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "text/html");

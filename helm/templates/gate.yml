@@ -1,0 +1,51 @@
+{{- with .Values.deployments.gate }}
+---
+
+# Gate Service Deployment
+#
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gate
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: gate
+  template:
+    metadata:
+      annotations:
+        rollme: {{ $.Release.Revision | quote }}
+      labels:
+        app.kubernetes.io/name: gate
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/release: {{ $.Release.Name }}
+    spec:
+      containers:
+        - name: gate
+          image: {{ .image }}:{{ .version }}
+          imagePullPolicy: {{ .pullPolicy }}
+          ports:
+            - containerPort: 18100
+          readinessProbe:
+            tcpSocket:
+              port: 18100
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+
+# Gate Service
+#
+apiVersion: v1
+kind: Service
+metadata:
+  name: gate
+spec:
+  type: NodePort
+  ports:
+    - port: 18100
+      nodePort: {{ .nodePort }}
+  selector:
+    app.kubernetes.io/name: gate
+---
+{{- end }}
