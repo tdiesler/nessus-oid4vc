@@ -87,7 +87,7 @@ do_ticket() {
 do_checkin() {
   echo
   echo "  Present Airline Ticket + Passport to the check-in verifier"
-  run_cmd ${OID4VC} ${VERBOSE} vp present \
+  run_cmd ${OID4VC} ${VERBOSE} vc present \
     --verifier "http://localhost:30200/checkin"
 }
 
@@ -98,11 +98,17 @@ do_boarding_pass() {
 do_gate() {
   echo
   echo "  Present Boarding Pass + Passport to the gate verifier"
-  run_cmd ${OID4VC} ${VERBOSE} vp present \
+  run_cmd ${OID4VC} ${VERBOSE} vc present \
     --verifier "http://localhost:30300/gate"
 }
 
-next="1"
+do_show_vc() {
+  echo
+  echo "  Show stored verifiable credentials"
+  run_cmd ${OID4VC} ${VERBOSE} show vc
+}
+
+next="0"
 
 while true; do
   echo
@@ -110,6 +116,7 @@ while true; do
   echo "  OID4VC Airport Demo"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo
+  echo "  0 - Show verifiable credentials"
   echo "  1 - Get a passport credential"
   echo "  2 - Make an airline booking"
   echo "  3 - Get the airline ticket credential"
@@ -122,6 +129,7 @@ while true; do
   choice="${choice:-${next}}"
 
   case "${choice}" in
+    0) do_show_vc; next="1" ;;
     1) do_passport; next="2" ;;
     2) do_booking; next="3" ;;
     3) do_ticket; next="4" ;;

@@ -94,7 +94,7 @@ public class CheckinRoutes extends RouteBuilder {
                 });
     }
 
-    private void serveResource(Exchange exchange, String path) {
+    private void serveResource(Exchange exchange, String path) throws Exception {
         var html = new String(getClass().getClassLoader().getResourceAsStream(path).readAllBytes());
         exchange.getIn().setBody(html);
         exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "text/html");

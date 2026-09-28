@@ -13,11 +13,11 @@ import static io.nessus.oid4vc.cli.RootCmd.*;
 @Command(name = "show", mixinStandardHelpOptions = true, description = "Show wallet and server state",
     subcommands = {
         ShowCmd.ClientShow.class,
-        ShowCmd.Keys.class,
+        ShowCmd.KeyShow.class,
         ShowCmd.RealmShow.class,
         ShowCmd.ScopeShow.class,
         ShowCmd.UserShow.class,
-        ShowCmd.Vcs.class
+        ShowCmd.VcShow.class
     })
 class ShowCmd implements Runnable {
 
@@ -83,8 +83,8 @@ class ShowCmd implements Runnable {
         }
     }
 
-    @Command(name = "keys", description = "Show holder keys")
-    static class Keys implements Callable<Integer> {
+    @Command(name = "key", description = "Show holder keys")
+    static class KeyShow implements Callable<Integer> {
 
         @Option(names = {"-r", "--realm"}, description = "Realm name (defaults to current realm)")
         String realm;
@@ -230,8 +230,8 @@ class ShowCmd implements Runnable {
         }
     }
 
-    @Command(name = "vcs", description = "Show stored verifiable credentials")
-    static class Vcs implements Callable<Integer> {
+    @Command(name = "vc", description = "Show stored verifiable credentials")
+    static class VcShow implements Callable<Integer> {
 
         @Option(names = "--credential-id", description = "Credential key or index number (omit to list all)")
         String credId;
@@ -296,7 +296,7 @@ class ShowCmd implements Runnable {
             } catch (NumberFormatException ignored) {}
 
             if (!conn.credentials.containsKey(resolvedKey)) {
-                System.err.println("No credential '" + resolvedKey + "'. Run 'oid4vc show vcs' to list.");
+                System.err.println("No credential '" + resolvedKey + "'. Run 'oid4vc show vc' to list.");
                 return 1;
             }
 

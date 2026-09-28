@@ -11,8 +11,8 @@ class ShowCmdTest extends AbstractCmdTest {
     void showHelp() throws Exception {
         var result = cli("show", "--help");
         assertEquals(0, result.exitCode());
-        assertTrue(result.stdout().contains("vcs"), result.stdout());
-        assertTrue(result.stdout().contains("keys"), result.stdout());
+        assertTrue(result.stdout().contains("vc"), result.stdout());
+        assertTrue(result.stdout().contains("key"), result.stdout());
         assertTrue(result.stdout().contains("realm"), result.stdout());
         assertTrue(result.stdout().contains("client"), result.stdout());
         assertTrue(result.stdout().contains("scope"), result.stdout());
@@ -23,7 +23,7 @@ class ShowCmdTest extends AbstractCmdTest {
     void showVcsList() throws Exception {
         assumeTrue(walletExists, "Run oid4vc-setup first");
 
-        var result = cli("show", "vcs");
+        var result = cli("show", "vc");
         assertEquals(0, result.exitCode(), result.stderr());
         assertTrue(result.stdout().contains("oid4vc_natural_person_jwt"), result.stdout());
     }
@@ -32,7 +32,7 @@ class ShowCmdTest extends AbstractCmdTest {
     void showVcsByIndex() throws Exception {
         assumeTrue(walletExists, "Run oid4vc-setup first");
 
-        var result = cli("show", "vcs", "--credential-id", "1");
+        var result = cli("show", "vc", "--credential-id", "1");
         assertEquals(0, result.exitCode(), result.stderr());
         assertTrue(result.stdout().contains("credentialSubject"), result.stdout());
     }
@@ -41,7 +41,7 @@ class ShowCmdTest extends AbstractCmdTest {
     void showVcsByName() throws Exception {
         assumeTrue(walletExists, "Run oid4vc-setup first");
 
-        var result = cli("show", "vcs", "--credential-id", "oid4vc_natural_person_jwt_0000");
+        var result = cli("show", "vc", "--credential-id", "oid4vc_natural_person_jwt_0000");
         assertEquals(0, result.exitCode(), result.stderr());
         assertTrue(result.stdout().contains("credentialSubject"), result.stdout());
     }
@@ -50,7 +50,7 @@ class ShowCmdTest extends AbstractCmdTest {
     void showVcsInvalidIndex() throws Exception {
         assumeTrue(walletExists, "Run oid4vc-setup first");
 
-        var result = cli("show", "vcs", "--credential-id", "99");
+        var result = cli("show", "vc", "--credential-id", "99");
         assertNotEquals(0, result.exitCode());
         assertTrue(result.stderr().contains("out of range"), result.stderr());
     }
@@ -59,7 +59,7 @@ class ShowCmdTest extends AbstractCmdTest {
     void showKeys() throws Exception {
         assumeTrue(walletExists, "Run oid4vc-setup first");
 
-        var result = cli("show", "keys");
+        var result = cli("show", "key");
         assertEquals(0, result.exitCode(), result.stderr());
         assertTrue(result.stdout().contains("EC"), result.stdout());
         assertTrue(result.stdout().contains("P-256"), result.stdout());
