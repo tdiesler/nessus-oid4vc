@@ -35,14 +35,34 @@ RESULT=$(kcadm create realms -o -s realm="${REALM}" \
   -s enabled="true")
 if ${VERBOSE}; then echo "${RESULT}"; fi
 
-# Create Realm Keys
+# Register CA-signed ES256 signing key (HAIP-6.1.1: certificate MUST NOT be self-signed)
+# Prerequisite: run 'scripts/create-signing-keystore' and deploy with helm
 #
-echo "Creating ES256 signing key in realm '${REALM}' ..."
+echo "Registering ES256 signing key in realm '${REALM}' ..."
 RESULT=$(kcadm create components -o -r "${REALM}" \
   -s name="es256-vc-signing" \
+  -s providerId="java-keystore" \
   -s providerType="org.keycloak.keys.KeyProvider" \
-  -s providerId="ecdsa-generated")
+  -s 'config.keyUse=["sig"]' \
+  -s 'config.algorithm=["ES256"]' \
+  -s 'config.keyPassword=["changeit"]' \
+  -s 'config.storePassword=["changeit"]' \
+  -s 'config.keystorePassword=["changeit"]' \
+  -s 'config.keyAlias=["es256-vc-signing"]' \
+  -s 'config.keystore=["es256-vc-signing.p12"]')
 if ${VERBOSE}; then echo "${RESULT}"; fi
+
+# Configure auto-created scopes to use ES256 (default is RS256)
+#
+for scope_name in oid4vc_natural_person_jwt oid4vc_natural_person_sd; do
+  echo "Setting signing algorithm ES256 on scope '${scope_name}' ..."
+  SCOPE_ID=$(kcadm get client-scopes -r "${REALM}" --fields id,name 2>/dev/null \
+    | python3 -c "import json,sys
+for s in json.load(sys.stdin):
+    if s['name']=='${scope_name}': print(s['id'])")
+  kcadm update "client-scopes/${SCOPE_ID}" -r "${REALM}" \
+    -s 'attributes."vc.credential_signing_alg"=ES256'
+done
 
 echo "Creating ECDH-ES encryption key in realm '${REALM}' ..."
 RESULT=$(kcadm create components -o -r "${REALM}" \

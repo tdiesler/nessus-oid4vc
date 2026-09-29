@@ -62,6 +62,10 @@ spec:
           volumeMounts:
             - name: providers
               mountPath: /opt/keycloak/providers
+            - name: signing-keystore
+              mountPath: /opt/keycloak/data/{{ .realm }}/es256-vc-signing.p12
+              subPath: es256-vc-signing.p12
+              readOnly: true
           ports:
             - containerPort: 8080
           readinessProbe:
@@ -84,6 +88,9 @@ spec:
         - name: providers
           persistentVolumeClaim:
             claimName: keycloak-providers
+        - name: signing-keystore
+          secret:
+            secretName: signing-keystore
 ---
 
 # Keycloak Providers PVC

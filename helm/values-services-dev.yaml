@@ -23,6 +23,7 @@ deployments:
     image: "keycloak"
     version: nightly
     nodePort: 30800
+    realm: oid4vci
     pullPolicy: IfNotPresent
 
   # Ticket Service
