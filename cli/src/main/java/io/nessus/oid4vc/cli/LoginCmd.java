@@ -128,7 +128,7 @@ class LoginCmd implements Callable<Integer> {
             }
             if (json == null) return 1;
 
-            if (verbose) System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(json));
+            if (verbose) System.err.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(json));
 
             var resolvedUser = user;
             if (resolvedUser == null) {
@@ -258,7 +258,7 @@ class LoginCmd implements Callable<Integer> {
                     + "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)
                     + "&scope=" + URLEncoder.encode(authScope, StandardCharsets.UTF_8);
 
-            if (verbose) System.out.println("GET " + authUrl);
+            if (verbose) System.err.println("GET " + authUrl);
 
             if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.BROWSE)) {
                 System.out.println("Opening browser for login...");
@@ -269,7 +269,7 @@ class LoginCmd implements Callable<Integer> {
             }
 
             var code = codeFuture.get(120, TimeUnit.SECONDS);
-            if (verbose) System.out.println("Auth code: " + code);
+            if (verbose) System.err.println("Auth code: " + code);
 
             return exchangeCodeForTokens(serverUrl, tokenRealm, clientId, code, redirectUri);
         } finally {
@@ -291,7 +291,7 @@ class LoginCmd implements Callable<Integer> {
             + "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)
             + "&scope=" + URLEncoder.encode(authScope, StandardCharsets.UTF_8);
 
-        if (verbose) System.out.println("GET " + authUrl);
+        if (verbose) System.err.println("GET " + authUrl);
 
         try (var pw = Playwright.create()) {
             var pwBrowser = pw.chromium().launch(new BrowserType.LaunchOptions().setHeadless(true));
@@ -312,7 +312,7 @@ class LoginCmd implements Callable<Integer> {
 
             page.waitForURL("**/oauth/oob**");
             var oobUrl = page.url();
-            if (verbose) System.out.println("OOB redirect: " + oobUrl);
+            if (verbose) System.err.println("OOB redirect: " + oobUrl);
 
             String code = null;
             var query = oobUrl.substring(oobUrl.indexOf('?') + 1);
@@ -326,7 +326,7 @@ class LoginCmd implements Callable<Integer> {
                 return null;
             }
             pwBrowser.close();
-            if (verbose) System.out.println("Auth code: " + code);
+            if (verbose) System.err.println("Auth code: " + code);
 
             return exchangeCodeForTokens(serverUrl, tokenRealm, clientId, code, redirectUri);
         }

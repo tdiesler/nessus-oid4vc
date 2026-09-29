@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 
 set -euo pipefail
 
@@ -6,16 +6,9 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OID4VC="${SCRIPT_DIR}/../bin/oid4vc"
 source "${SCRIPT_DIR}/oid4vc-functions"
 
-VERBOSE=""
-REALM="oid4vci"
-for arg in "$@"; do
-  case "${arg}" in
-    --verbose) VERBOSE="--verbose" ;;
-    *) REALM="${arg}" ;;
-  esac
-done
+REALM="${1:-oid4vci}"
 
-run_cmd() {
+format_cmd() {
   local display="" prev_was_option=false
   for arg in "$@"; do
     if [[ "${arg}" == "${OID4VC}" ]]; then
@@ -32,12 +25,25 @@ run_cmd() {
       prev_was_option=false
     fi
   done
+  echo "${display% }"
+}
+
+run_headless() {
   echo
-  echo "  \$ ${display}"
-  echo
-  read -rp "  Press Enter to run..."
+  echo "  \$ $(format_cmd "$@")"
   echo
   "$@"
+}
+
+run_editable() {
+  local cmd="$(format_cmd "$@")"
+
+  echo
+  vared -p "  \$ " cmd
+  echo
+
+  local expanded="${cmd/#oid4vc /${OID4VC} }"
+  eval "${expanded}"
 }
 
 get_vc() {
@@ -46,7 +52,7 @@ get_vc() {
 
   echo
   echo "  Step 1/2: Login as Alice with scope ${scope}"
-  run_cmd ${OID4VC} ${VERBOSE} login \
+  run_editable ${OID4VC} login \
     --browser \
     --user "alice" \
     --scope "${scope}"
@@ -54,11 +60,12 @@ get_vc() {
   echo
   echo "  Step 2/2: Request the ${label}"
   echo
-  echo "  \$ oid4vc vc get --credential-id \"${scope}_0000\""
+  local cmd="oid4vc vc get --credential-id \"${scope}_0000\""
+  vared -p "  \$ " cmd
   echo
-  read -rp "  Press Enter to run..."
-  echo
-  vc_jwt=$(${OID4VC} ${VERBOSE} vc get --credential-id "${scope}_0000")
+
+  local expanded="${cmd/#oid4vc /${OID4VC} }"
+  vc_jwt=$(eval "${expanded}")
   echo
   echo "  Decoded Verifiable Credential:"
   echo
@@ -72,7 +79,7 @@ do_passport() {
 do_booking() {
   echo
   echo "  Create an airline ticket booking for passenger Alice"
-  run_cmd ${OID4VC} ${VERBOSE} demo booking \
+  run_editable ${OID4VC} demo booking \
     --passenger-id "alice" \
     --passenger-name "Alice Wonderland" \
     --flight "BA123" \
@@ -87,7 +94,7 @@ do_ticket() {
 do_checkin() {
   echo
   echo "  Present Airline Ticket + Passport to the check-in verifier"
-  run_cmd ${OID4VC} ${VERBOSE} vc present \
+  run_editable ${OID4VC} vc present \
     --verifier "http://localhost:30200/checkin"
 }
 
@@ -98,14 +105,14 @@ do_boarding_pass() {
 do_gate() {
   echo
   echo "  Present Boarding Pass + Passport to the gate verifier"
-  run_cmd ${OID4VC} ${VERBOSE} vc present \
+  run_editable ${OID4VC} vc present \
     --verifier "http://localhost:30300/gate"
 }
 
 do_show_vc() {
   echo
   echo "  Show stored verifiable credentials"
-  run_cmd ${OID4VC} ${VERBOSE} show vc
+  run_editable ${OID4VC} show vc
 }
 
 next="0"
@@ -125,7 +132,7 @@ while true; do
   echo "  6 - Board at the gate (verify boarding pass + passport)"
   echo "  q - Quit"
   echo
-  read -rp "  Choose an option [${next}]: " choice
+  read -r "choice?  Choose an option [${next}]: "
   choice="${choice:-${next}}"
 
   case "${choice}" in

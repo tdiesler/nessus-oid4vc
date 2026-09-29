@@ -60,7 +60,7 @@ class DemoCmd implements Runnable {
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build();
 
-                if (verbose) System.out.println("POST " + url);
+                if (verbose) System.err.println("POST " + url);
 
                 var response = HTTP.send(request, HttpResponse.BodyHandlers.ofString());
                 if (response.statusCode() != 200) {

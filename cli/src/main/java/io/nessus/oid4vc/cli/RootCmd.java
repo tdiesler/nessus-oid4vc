@@ -58,7 +58,7 @@ public class RootCmd implements Runnable {
 
     public static void main(String[] args) {
         int exitCode = new CommandLine(new RootCmd()).execute(args);
-        if (verbose) System.out.println();
+        if (verbose) System.err.println();
         System.exit(exitCode);
     }
 
@@ -103,9 +103,9 @@ public class RootCmd implements Runnable {
     static HttpResponse<String> httpGet(String url, String bearerToken) throws Exception {
         var builder = HttpRequest.newBuilder().uri(URI.create(url)).GET();
         if (bearerToken != null) builder.header("Authorization", "Bearer " + bearerToken);
-        if (verbose) System.out.println("GET " + url);
+        if (verbose) System.err.println("GET " + url);
         var response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-        if (verbose) System.out.println("Response: " + response.statusCode());
+        if (verbose) System.err.println("Response: " + response.statusCode());
         return response;
     }
 
@@ -116,11 +116,11 @@ public class RootCmd implements Runnable {
         if (body != null) builder.POST(HttpRequest.BodyPublishers.ofString(body));
         else builder.POST(HttpRequest.BodyPublishers.noBody());
         if (verbose) {
-            System.out.println("POST " + url);
-            if (body != null) System.out.println(body);
+            System.err.println("POST " + url);
+            if (body != null) System.err.println(body);
         }
         var response = HTTP.send(builder.build(), HttpResponse.BodyHandlers.ofString());
-        if (verbose) System.out.println("Response: " + response.statusCode());
+        if (verbose) System.err.println("Response: " + response.statusCode());
         return response;
     }
 

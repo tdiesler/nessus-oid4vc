@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/zsh
 
 decode_vc() {
   local jwt="$1"

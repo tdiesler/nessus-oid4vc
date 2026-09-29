@@ -75,7 +75,7 @@ class VcCmd implements Runnable {
                     return 1;
                 }
                 var cNonce = MAPPER.readTree(nonceResponse.body()).get("c_nonce").asText();
-                if (verbose) System.out.println("Nonce: " + cNonce);
+                if (verbose) System.err.println("Nonce: " + cNonce);
 
                 if (conn.keys == null || conn.keys.isEmpty()) {
                     System.err.println("No holder key. Run 'oid4vc key create --algo ES256 --user <name>' first.");
@@ -97,7 +97,7 @@ class VcCmd implements Runnable {
                     jwkMap = conn.keys.get(0);
                 }
                 var usedKid = (String) jwkMap.get("kid");
-                if (verbose) System.out.println("Using key '" + usedKid + "'");
+                if (verbose) System.err.println("Using key '" + usedKid + "'");
                 var ecKey = com.nimbusds.jose.jwk.ECKey.parse(jwkMap);
                 var proofHeader = new JWSHeader.Builder(JWSAlgorithm.ES256)
                     .type(new JOSEObjectType("openid4vci-proof+jwt"))
@@ -171,7 +171,7 @@ class VcCmd implements Runnable {
             var conn = resolveConnection(wallet, realmName, user);
 
             try {
-                if (verbose) System.out.println("Contacting verifier: " + verifierUrl);
+                if (verbose) System.err.println("Contacting verifier: " + verifierUrl);
 
                 var authRequest = HttpRequest.newBuilder()
                         .uri(URI.create(verifierUrl))
@@ -206,7 +206,7 @@ class VcCmd implements Runnable {
                     return 1;
                 }
 
-                if (verbose) System.out.println("Matched credentials: " + matchedVcs.keySet());
+                if (verbose) System.err.println("Matched credentials: " + matchedVcs.keySet());
 
                 if (conn.keys == null || conn.keys.isEmpty()) {
                     System.err.println("No holder key. Run 'oid4vc key create --algo ES256' first.");
