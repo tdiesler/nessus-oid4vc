@@ -7,6 +7,7 @@ OID4VC="${SCRIPT_DIR}/../bin/oid4vc"
 source "${SCRIPT_DIR}/oid4vc-functions"
 
 REALM="${1:-oid4vci}"
+VC_FMT="jwt"
 
 format_cmd() {
   local display="" prev_was_option=false
@@ -73,7 +74,7 @@ get_vc() {
 }
 
 do_passport() {
-  get_vc "oid4vc_natural_person_jwt" "Passport Credential"
+  get_vc "oid4vc_natural_person_${VC_FMT}" "Passport Credential"
 }
 
 do_booking() {
@@ -88,7 +89,7 @@ do_booking() {
 }
 
 do_ticket() {
-  get_vc "oid4vc_airline_ticket_jwt" "Airline Ticket Credential"
+  get_vc "oid4vc_airline_ticket_${VC_FMT}" "Airline Ticket Credential"
 }
 
 do_checkin() {
@@ -99,7 +100,7 @@ do_checkin() {
 }
 
 do_boarding_pass() {
-  get_vc "oid4vc_boarding_pass_jwt" "Boarding Pass Credential"
+  get_vc "oid4vc_boarding_pass_${VC_FMT}" "Boarding Pass Credential"
 }
 
 do_gate() {
@@ -120,7 +121,9 @@ next="0"
 while true; do
   echo
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo "  OID4VC Airport Demo"
+  local vc_fmt_label="jwt_vc_json"
+  if [[ "${VC_FMT}" == "sd" ]]; then vc_fmt_label="dc+sd-jwt"; fi
+  echo "  OID4VC Airport Demo              [${vc_fmt_label}]"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo
   echo "  0 - Show verifiable credentials"
@@ -130,6 +133,7 @@ while true; do
   echo "  4 - Check in (verify ticket + passport)"
   echo "  5 - Get the boarding pass credential"
   echo "  6 - Board at the gate (verify boarding pass + passport)"
+  echo "  f - Switch VC format (jwt/sd)"
   echo "  q - Quit"
   echo
   read -r "choice?  Choose an option [${next}]: "
@@ -143,6 +147,7 @@ while true; do
     4) do_checkin; next="5" ;;
     5) do_boarding_pass; next="6" ;;
     6) do_gate; next="q" ;;
+    f|F) if [[ "${VC_FMT}" == "jwt" ]]; then VC_FMT="sd"; else VC_FMT="jwt"; fi ;;
     q|Q) echo; echo "  Bye."; break ;;
     *) echo "  Invalid option." ;;
   esac

@@ -71,81 +71,70 @@ RESULT=$(kcadm create components -o -r "${REALM}" \
   -s providerId="ecdh-generated")
 if ${VERBOSE}; then echo "${RESULT}"; fi
 
-# Create Airline Ticket Scope with GraphQL protocol mapper
-#
-echo "Creating client scope 'oid4vc_airline_ticket_jwt' ..."
-RESULT=$(kcadm create client-scopes -o -r "${REALM}" \
-  -s name="oid4vc_airline_ticket_jwt" \
-  -s protocol="oid4vc" \
-  -s attributes='{
-    "vc.format": "jwt_vc_json",
-    "vc.binding_required": "true",
-    "vc.binding_required_proof_types": "jwt,attestation",
-    "vc.cryptographic_binding_methods_supported": "jwk",
-    "vc.verifiable_credential_type": "AirlineTicketCredential"
-  }' \
-  -s protocolMappers='[
-    {
-      "name": "subject-id",
-      "protocol": "oid4vc",
-      "protocolMapper": "oid4vc-subject-id-mapper",
-      "config": {
-        "claim.name": "id",
-        "userAttribute": "username"
-      }
-    },
-    {
-      "name": "airline-ticket",
-      "protocol": "oid4vc",
-      "protocolMapper": "oid4vc-graphql-claim-mapper",
-      "config": {
-        "claim.name": "airline-ticket",
-        "graphqlEndpoint": "http://ticket:18080/graphql",
-        "graphqlQuery": "query($id: String!) { booking(passengerId: $id) { flightNumber route departureDateTime bookingReference passengerName } }",
-        "graphqlVariableMapping": "id=username",
-        "responsePath": "booking"
-      }
-    }
-  ]')
-if ${VERBOSE}; then echo "${RESULT}"; fi
+create_vc_scope() {
+  local scope_name="$1"
+  local vc_format="$2"
+  local vc_type="$3"
+  local mapper_name="$4"
+  local graphql_endpoint="$5"
+  local graphql_query="$6"
+  local response_path="$7"
 
-# Create Boarding Pass Scope with GraphQL protocol mapper
+  local sd_jwt_attrs=""
+  if [[ "${vc_format}" == "dc+sd-jwt" ]]; then
+    sd_jwt_attrs=',
+      "vc.credential_build_config.hash_algorithm": "SHA-256",
+      "vc.credential_build_config.token_jws_type": "dc+sd-jwt",
+      "vc.credential_build_config.sd_jwt.visible_claims": "id,iat,nbf,exp,jti"'
+  fi
+
+  echo "Creating client scope '${scope_name}' ..."
+  RESULT=$(kcadm create client-scopes -o -r "${REALM}" \
+    -s name="${scope_name}" \
+    -s protocol="oid4vc" \
+    -s attributes="{
+      \"vc.format\": \"${vc_format}\",
+      \"vc.binding_required\": \"true\",
+      \"vc.binding_required_proof_types\": \"jwt,attestation\",
+      \"vc.cryptographic_binding_methods_supported\": \"jwk\",
+      \"vc.credential_signing_alg\": \"ES256\",
+      \"vc.verifiable_credential_type\": \"${vc_type}\"${sd_jwt_attrs}
+    }" \
+    -s protocolMappers="[
+      {
+        \"name\": \"subject-id\",
+        \"protocol\": \"oid4vc\",
+        \"protocolMapper\": \"oid4vc-subject-id-mapper\",
+        \"config\": {
+          \"claim.name\": \"id\",
+          \"userAttribute\": \"username\"
+        }
+      },
+      {
+        \"name\": \"${mapper_name}\",
+        \"protocol\": \"oid4vc\",
+        \"protocolMapper\": \"oid4vc-graphql-claim-mapper\",
+        \"config\": {
+          \"claim.name\": \"${mapper_name}\",
+          \"graphqlEndpoint\": \"${graphql_endpoint}\",
+          \"graphqlQuery\": \"${graphql_query}\",
+          \"graphqlVariableMapping\": \"id=username\",
+          \"responsePath\": \"${response_path}\"
+        }
+      }
+    ]")
+  if ${VERBOSE}; then echo "${RESULT}"; fi
+}
+
+TICKET_QUERY='query($id: String!) { booking(passengerId: $id) { flightNumber route departureDateTime bookingReference passengerName } }'
+BOARDING_QUERY='query($id: String!) { boardingPass(passengerId: $id) { passengerName flightNumber seat boardingGroup departureDateTime gate } }'
+
+# Create Airline Ticket + Boarding Pass Scopes (SD-JWT + JWT)
 #
-echo "Creating client scope 'oid4vc_boarding_pass_jwt' ..."
-RESULT=$(kcadm create client-scopes -o -r "${REALM}" \
-  -s name="oid4vc_boarding_pass_jwt" \
-  -s protocol="oid4vc" \
-  -s attributes='{
-    "vc.format": "jwt_vc_json",
-    "vc.binding_required": "true",
-    "vc.binding_required_proof_types": "jwt,attestation",
-    "vc.cryptographic_binding_methods_supported": "jwk",
-    "vc.verifiable_credential_type": "BoardingPassCredential"
-  }' \
-  -s protocolMappers='[
-    {
-      "name": "subject-id",
-      "protocol": "oid4vc",
-      "protocolMapper": "oid4vc-subject-id-mapper",
-      "config": {
-        "claim.name": "id",
-        "userAttribute": "username"
-      }
-    },
-    {
-      "name": "boarding-pass",
-      "protocol": "oid4vc",
-      "protocolMapper": "oid4vc-graphql-claim-mapper",
-      "config": {
-        "claim.name": "boarding-pass",
-        "graphqlEndpoint": "http://checkin:18090/graphql",
-        "graphqlQuery": "query($id: String!) { boardingPass(passengerId: $id) { passengerName flightNumber seat boardingGroup departureDateTime gate } }",
-        "graphqlVariableMapping": "id=username",
-        "responsePath": "boardingPass"
-      }
-    }
-  ]')
-if ${VERBOSE}; then echo "${RESULT}"; fi
+create_vc_scope "oid4vc_airline_ticket_jwt" "jwt_vc_json"  "AirlineTicketCredential"  "airline-ticket" "http://ticket:18080/graphql"  "${TICKET_QUERY}"   "booking"
+create_vc_scope "oid4vc_airline_ticket_sd"  "dc+sd-jwt"   "AirlineTicketCredential"  "airline-ticket" "http://ticket:18080/graphql"  "${TICKET_QUERY}"   "booking"
+create_vc_scope "oid4vc_boarding_pass_jwt"  "jwt_vc_json"  "BoardingPassCredential"   "boarding-pass"  "http://checkin:18090/graphql" "${BOARDING_QUERY}"  "boardingPass"
+create_vc_scope "oid4vc_boarding_pass_sd"   "dc+sd-jwt"    "BoardingPassCredential"   "boarding-pass"  "http://checkin:18090/graphql" "${BOARDING_QUERY}"  "boardingPass"
 
 # Create OID4VCI Client
 #
@@ -164,7 +153,9 @@ RESULT=$(kcadm create clients -o -r "${REALM}" \
     "profile",
     "oid4vc_natural_person_sd",
     "oid4vc_natural_person_jwt",
+    "oid4vc_airline_ticket_sd",
     "oid4vc_airline_ticket_jwt",
+    "oid4vc_boarding_pass_sd",
     "oid4vc_boarding_pass_jwt"
     ]' \
   -s attributes='{"oid4vci.enabled":"true"}')
@@ -197,7 +188,7 @@ RESULT=$(kcadm create users -i -r "${REALM}" \
   -s credentials='[{"type":"password","value":"password","temporary":false}]')
 ALICE_ID="${RESULT}"
 
-for scope in oid4vc_natural_person_sd oid4vc_natural_person_jwt oid4vc_airline_ticket_jwt oid4vc_boarding_pass_jwt; do
+for scope in oid4vc_natural_person_sd oid4vc_natural_person_jwt oid4vc_airline_ticket_sd oid4vc_airline_ticket_jwt oid4vc_boarding_pass_sd oid4vc_boarding_pass_jwt; do
   echo "Assigning VC scope '${scope}' to user 'alice' ..."
   kcadm create "users/${ALICE_ID}/vc/credentials" -r "${REALM}" \
     -s "credentialScopeName=${scope}"
@@ -212,12 +203,13 @@ ${OID4VC} ${OID4VC_VERBOSE} config --server "http://localhost:30800" --realm "${
 #
 ${OID4VC} ${OID4VC_VERBOSE} key create --user "alice" --algo "ES256"
 
-# Holder Login & Credential (JWT)
+# Holder Login & Credential
 #
-scope="oid4vc_natural_person_jwt"
-${OID4VC} ${OID4VC_VERBOSE} login --realm "${REALM}" --client "oid4vci-client" --user "alice" --password "password" --scope "${scope}"
-vc_jwt=$(${OID4VC} ${OID4VC_VERBOSE} vc get --credential-id "${scope}_0000")
-echo "Credential: ${vc_jwt}"
-decode_vc "${vc_jwt}"
+for scope in "oid4vc_natural_person_jwt" "oid4vc_natural_person_sd"; do
+  ${OID4VC} ${OID4VC_VERBOSE} login --realm "${REALM}" --client "oid4vci-client" --user "alice" --password "password" --scope "${scope}"
+  vc_jwt=$(${OID4VC} ${OID4VC_VERBOSE} vc get --credential-id "${scope}_0000")
+  echo "Credential: ${vc_jwt}"
+  decode_vc "${vc_jwt}"
+done
 
 echo "Realm setup complete"
