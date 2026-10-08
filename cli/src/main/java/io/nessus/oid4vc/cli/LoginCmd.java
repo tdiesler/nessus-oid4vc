@@ -16,6 +16,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
@@ -161,6 +162,11 @@ class LoginCmd implements Callable<Integer> {
             conn.accessToken = json.get("access_token").asText();
             conn.refreshToken = json.get("refresh_token").asText();
             conn.expiresAt = Instant.now().plusSeconds(json.get("expires_in").asLong()).toString();
+            var authDetails = json.get("authorization_details");
+            if (authDetails != null && authDetails.isArray() && !authDetails.isEmpty()) {
+                conn.authorizationDetails = MAPPER.convertValue(authDetails,
+                    MAPPER.getTypeFactory().constructCollectionType(java.util.List.class, java.util.Map.class));
+            }
             realmState.defaultUser = resolvedUser;
 
             if (realm == null) {
@@ -197,13 +203,42 @@ class LoginCmd implements Callable<Integer> {
     }
 
     private JsonNode userLogin(String serverUrl, String tokenRealm, String clientId) throws Exception {
+        var issuerState = resolveIssuerState(tokenRealm);
         if (browser) {
-            return browserLogin(serverUrl, tokenRealm, clientId);
+            return browserLogin(serverUrl, tokenRealm, clientId, issuerState);
         }
-        return playwrightLogin(serverUrl, tokenRealm, clientId);
+        return playwrightLogin(serverUrl, tokenRealm, clientId, issuerState);
     }
 
-    private JsonNode browserLogin(String serverUrl, String tokenRealm, String clientId) throws Exception {
+    private String resolveIssuerState(String tokenRealm) {
+        if (scope == null) return null;
+        try {
+            var wallet = loadWallet();
+            var resolvedUser = user;
+            if (resolvedUser == null && wallet.realms != null) {
+                var rs = wallet.realms.get(tokenRealm);
+                if (rs != null) resolvedUser = rs.defaultUser;
+            }
+            if (resolvedUser == null) return null;
+            var conn = resolveConnection(wallet, tokenRealm, resolvedUser);
+            if (conn.offers == null) return null;
+            var offer = conn.offers.get(scope);
+            if (offer == null) return null;
+            @SuppressWarnings("unchecked")
+            var grants = (Map<String, Object>) offer.get("grants");
+            if (grants == null) return null;
+            @SuppressWarnings("unchecked")
+            var authCodeGrant = (Map<String, Object>) grants.get("authorization_code");
+            if (authCodeGrant == null) return null;
+            var state = (String) authCodeGrant.get("issuer_state");
+            if (verbose && state != null) System.err.println("Resolved issuer_state from offer: " + state);
+            return state;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private JsonNode browserLogin(String serverUrl, String tokenRealm, String clientId, String issuerState) throws Exception {
         var codeFuture = new CompletableFuture<String>();
         var callbackPort = 18888;
         var httpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", callbackPort), 0);
@@ -257,6 +292,9 @@ class LoginCmd implements Callable<Integer> {
                     + "&client_id=" + URLEncoder.encode(clientId, StandardCharsets.UTF_8)
                     + "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)
                     + "&scope=" + URLEncoder.encode(authScope, StandardCharsets.UTF_8);
+            if (issuerState != null) {
+                authUrl += "&issuer_state=" + URLEncoder.encode(issuerState, StandardCharsets.UTF_8);
+            }
 
             if (verbose) System.err.println("GET " + authUrl);
 
@@ -277,7 +315,7 @@ class LoginCmd implements Callable<Integer> {
         }
     }
 
-    private JsonNode playwrightLogin(String serverUrl, String tokenRealm, String clientId) throws Exception {
+    private JsonNode playwrightLogin(String serverUrl, String tokenRealm, String clientId, String issuerState) throws Exception {
         if (password == null) {
             System.err.println("Headless login requires --password. Use --browser for interactive login.");
             return null;
@@ -290,6 +328,9 @@ class LoginCmd implements Callable<Integer> {
             + "&client_id=" + URLEncoder.encode(clientId, StandardCharsets.UTF_8)
             + "&redirect_uri=" + URLEncoder.encode(redirectUri, StandardCharsets.UTF_8)
             + "&scope=" + URLEncoder.encode(authScope, StandardCharsets.UTF_8);
+        if (issuerState != null) {
+            authUrl += "&issuer_state=" + URLEncoder.encode(issuerState, StandardCharsets.UTF_8);
+        }
 
         if (verbose) System.err.println("GET " + authUrl);
 

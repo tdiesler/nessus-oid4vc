@@ -1,10 +1,9 @@
 package io.nessus.oid4vc.cli;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.nimbusds.jose.crypto.RSASSAVerifier;
+import com.nimbusds.jose.crypto.ECDSAVerifier;
 import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.JWKSet;
-import com.nimbusds.jose.jwk.RSAKey;
 import com.nimbusds.jwt.SignedJWT;
 import org.junit.jupiter.api.Test;
 
@@ -34,19 +33,33 @@ class VcCmdTest extends AbstractCmdTest {
     }
 
     @Test
-    void vcGetByCredentialId() throws Exception {
+    void vcGetViaPreAuthOffer() throws Exception {
         assumeTrue(realmAvailable, "Run oid4vc-setup first");
         assumeTrue(walletExists, "Run oid4vc-setup first");
 
         var scope = "oid4vc_natural_person_jwt";
-        var login = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
-                "--user", "alice", "--password", "password", "--scope", scope);
-        assertEquals(0, login.exitCode(), login.stderr());
 
-        var result = cli("vc", "get", "--credential-id", scope + "_0000");
-        assertEquals(0, result.exitCode(), result.stderr());
+        // Login as max (offer creator)
+        var maxLogin = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
+                "--user", "max", "--password", "password");
+        assertEquals(0, maxLogin.exitCode(), maxLogin.stderr());
 
-        var vcJwt = result.stdout().trim();
+        // Create pre-auth offer for alice
+        var offerCreate = cli("offer", "create",
+                "--credential-configuration", scope,
+                "--target-user", "alice",
+                "--user", "max");
+        assertEquals(0, offerCreate.exitCode(), offerCreate.stderr());
+
+        // Alice fetches the offer
+        var offerGet = cli("offer", "get", scope, "--user", "alice");
+        assertEquals(0, offerGet.exitCode(), offerGet.stderr());
+
+        // Alice redeems the offer
+        var redeem = cli("offer", "redeem", scope, "--user", "alice");
+        assertEquals(0, redeem.exitCode(), redeem.stderr());
+
+        var vcJwt = redeem.stdout().trim();
         validateCredentialJwt(DEFAULT_REALM, vcJwt);
     }
 
@@ -105,7 +118,7 @@ class VcCmdTest extends AbstractCmdTest {
         var signingKey = jwkSet.getKeyByKeyId(header.getKeyID());
         assertNotNull(signingKey, "Signing key must be in realm JWKS");
 
-        var verified = signedJwt.verify(new RSASSAVerifier((RSAKey) signingKey));
+        var verified = signedJwt.verify(new ECDSAVerifier((ECKey) signingKey));
         assertTrue(verified, "JWT signature must be valid");
     }
 }

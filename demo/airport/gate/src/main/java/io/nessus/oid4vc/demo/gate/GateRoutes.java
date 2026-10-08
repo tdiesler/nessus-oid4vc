@@ -54,6 +54,8 @@ public class GateRoutes extends RouteBuilder {
 
     public GateRoutes(int port) {
         this.port = port;
+        var keycloakUrl = System.getenv("KEYCLOAK_URL");
+        if (keycloakUrl != null) jwtVerifier.setIssuerBaseUrl(keycloakUrl);
     }
 
     @Override
@@ -83,14 +85,6 @@ public class GateRoutes extends RouteBuilder {
     private void handleGateResponse(Exchange exchange) throws Exception {
         var body = exchange.getIn().getBody(String.class);
         var request = JSON.readTree(body);
-
-        var passengerId = request.has("passenger_id") ? request.get("passenger_id").asText() : null;
-        if (passengerId == null || passengerId.isBlank()) {
-            exchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
-            exchange.getIn().setBody("{\"status\":\"denied\",\"reason\":\"passenger_id required\"}");
-            exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
-            return;
-        }
 
         var vpTokenNode = request.get("vp_token");
         if (vpTokenNode == null) {

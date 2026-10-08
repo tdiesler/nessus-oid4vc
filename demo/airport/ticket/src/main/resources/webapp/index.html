@@ -25,9 +25,6 @@
     </nav>
     <h1>Airline Ticket Booking</h1>
     <form id="bookingForm">
-        <label>Passenger Id
-            <input name="passengerId" required value="alice">
-        </label>
         <label>Passenger Name
             <input name="passengerName" required value="Alice Wonderland">
         </label>
@@ -48,8 +45,6 @@
             e.preventDefault();
             const form = e.target;
             const data = Object.fromEntries(new FormData(form));
-            const passengerId = data.passengerId;
-            delete data.passengerId;
             if (data.departureDateTime) {
                 data.departureDateTime = new Date(data.departureDateTime).toISOString();
             }
@@ -57,12 +52,12 @@
             try {
                 const resp = await fetch('/api/booking', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Passenger-Id': passengerId },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
                 });
                 if (resp.ok) {
                     const result = await resp.json();
-                    res.textContent = 'Booking created: ' + result.bookingReference;
+                    res.textContent = 'Booking created: ' + result.bookingReference + ' (Ticket: ' + result.credentialId + ')';
                     res.className = 'success';
                 } else {
                     res.textContent = 'Error: ' + (await resp.text());

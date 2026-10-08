@@ -113,7 +113,6 @@ class GateServiceTest {
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
-        requestBody.put("passenger_id", "alice");
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/gate/response"))
@@ -147,7 +146,6 @@ class GateServiceTest {
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
-        requestBody.put("passenger_id", "alice");
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/gate/response"))
@@ -159,19 +157,6 @@ class GateServiceTest {
 
         var body = JSON.readTree(resp.body());
         assertEquals("denied", body.get("status").asText());
-    }
-
-    @Test
-    void gateResponseDeniedMissingPassengerId() throws Exception {
-        var requestBody = Map.of("vp_token", Map.of("boarding_pass", "dummy"));
-
-        var req = HttpRequest.newBuilder()
-                .uri(URI.create(BASE + "/gate/response"))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(requestBody)))
-                .build();
-        var resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
-        assertEquals(400, resp.statusCode());
     }
 
     static String buildVcJwt(Map<String, Object> vcClaims) throws Exception {

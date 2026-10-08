@@ -57,8 +57,13 @@ spec:
             # HTTP access (no TLS termination in-cluster)
             - name: KC_HTTP_ENABLED
               value: "true"
+            {{- if .externalIP }}
+            - name: KC_HOSTNAME
+              value: "http://{{ .externalIP }}:{{ .nodePort }}"
+            {{- else }}
             - name: KC_HOSTNAME_STRICT
               value: "false"
+            {{- end }}
           volumeMounts:
             - name: providers
               mountPath: /opt/keycloak/providers

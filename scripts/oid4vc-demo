@@ -6,6 +6,22 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 OID4VC="${SCRIPT_DIR}/../bin/oid4vc"
 source "${SCRIPT_DIR}/oid4vc-functions"
 
+EXTERNAL_IP="${EXTERNAL_IP:-localhost}"
+
+if [[ "${1:-}" == "--restart" ]]; then
+  local wf=".config/wallet.json"
+  if [[ -f "${wf}" ]]; then
+    jq '.realms[]?.users[]? |= del(.credentials, .offers, .authorizationDetails, .accessToken, .refreshToken, .expiresAt)' \
+      "${wf}" > "${wf}.tmp" && mv "${wf}.tmp" "${wf}"
+    echo "Wallet reset (offers, credentials, tokens; keys preserved)"
+  fi
+
+  curl -sf -X DELETE "http://${EXTERNAL_IP}:30100/api/bookings" > /dev/null 2>&1
+  curl -sf -X DELETE "http://${EXTERNAL_IP}:30200/api/passes" > /dev/null 2>&1
+  echo "Tickets and Boarding passes cleared"
+
+  shift
+fi
 REALM="${1:-oid4vci}"
 VC_FMT="jwt"
 
@@ -61,7 +77,7 @@ get_vc() {
   echo
   echo "  Step 2/2: Request the ${label}"
   echo
-  local cmd="oid4vc vc get --credential-id \"${scope}_0000\""
+  local cmd="oid4vc vc get --credential-identifier \"${scope}_0000\""
   vared -p "  \$ " cmd
   echo
 
@@ -74,49 +90,179 @@ get_vc() {
 }
 
 do_passport() {
-  get_vc "oid4vc_natural_person_${VC_FMT}" "Passport Credential"
+  local scope="oid4vc_natural_person_${VC_FMT}"
+
+  echo
+  echo "  Step 1/4: Max, employed by government, creates an auth-code grant credential offer for Alice"
+  run_headless ${OID4VC} login \
+    --realm "${REALM}" --user "max" --password "password"
+  run_editable ${OID4VC} offer create \
+    --user "max" \
+    --target-user "alice" \
+    --credential-configuration "${scope}" \
+    --pre-auth=false
+
+  echo
+  echo "  Step 2/4: Alice fetches the offer"
+  run_editable ${OID4VC} offer get "${scope}"
+
+  echo
+  echo "  Step 3/4: Alice logs in to authorize"
+  run_editable ${OID4VC} login \
+    --user "alice" \
+    --scope "${scope}" \
+    --browser
+
+  echo
+  echo "  Step 4/4: Alice redeems the offer"
+  redeem_offer "${scope}" "Passport"
+}
+
+redeem_offer() {
+  local scope="$1"
+  local label="$2"
+
+  echo
+  echo "  Redeem the ${label} offer"
+  echo
+  local cmd="oid4vc offer redeem \"${scope}\""
+  vared -p "  \$ " cmd
+  echo
+
+  local expanded="${cmd/#oid4vc /${OID4VC} }"
+  vc_jwt=$(eval "${expanded}")
+  echo
+  echo "  Decoded Verifiable Credential:"
+  echo
+  decode_vc "${vc_jwt}"
+}
+
+set_scope_cred_id() {
+  local scope_name="$1"
+  local cred_id="$2"
+  local sid=$(kcadm get client-scopes -r "${REALM}" --fields id,name 2>/dev/null \
+    | jq -r ".[] | select(.name==\"${scope_name}\") | .id")
+  if [[ -n "${sid}" ]]; then
+    kcadm update "client-scopes/${sid}" -r "${REALM}" \
+      -s "attributes.\"vc.credential_identifier\"=${cred_id}"
+  fi
 }
 
 do_booking() {
-  echo
-  echo "  Create an airline ticket booking for passenger Alice"
-  run_editable ${OID4VC} demo booking \
-    --passenger-id "alice" \
-    --passenger-name "Alice Wonderland" \
-    --flight "BA123" \
-    --route "LHR-JFK" \
-    --departure "2026-10-15T08:30:00Z"
-}
+  local scope="oid4vc_airline_ticket_${VC_FMT}"
 
-do_ticket() {
-  get_vc "oid4vc_airline_ticket_${VC_FMT}" "Airline Ticket Credential"
+  echo
+  echo "  Step 1/4: Create an airline ticket booking"
+  echo
+  local cmd="oid4vc demo booking --passenger-name \"Alice Wonderland\" --flight \"BA123\" --route \"LHR-JFK\" --departure \"2026-10-15T08:30:00Z\""
+  vared -p "  \$ " cmd
+  echo
+
+  local expanded="${cmd/#oid4vc /${OID4VC} }"
+  local booking_json
+  booking_json=$(eval "${expanded}") || return 1
+
+  local cred_id=$(echo "${booking_json}" | jq -r '.credentialId')
+  local booking_ref=$(echo "${booking_json}" | jq -r '.bookingReference')
+  echo "  Booking: ${booking_ref}, Ticket: ${cred_id}"
+  echo "  http://${EXTERNAL_IP}:30100/bookings.html"
+
+  # Set credentialId on scope and airline user
+  set_scope_cred_id "${scope}" "${cred_id}"
+  local airline_id=$(kcadm get users -r "${REALM}" -q username=airline --fields id 2>/dev/null \
+    | jq -r '.[0].id')
+  kcadm update "users/${airline_id}" -r "${REALM}" \
+    -s "attributes.credentialId=[\"${cred_id}\"]"
+
+  echo
+  echo "  Step 2/4: Airline creates a pre-auth credential offer"
+  run_headless ${OID4VC} login \
+    --realm "${REALM}" --user "airline" --password "password"
+  run_editable ${OID4VC} offer create \
+    --user "airline" \
+    --target-user "airline" \
+    --store-for "alice" \
+    --credential-configuration "${scope}" \
+    --pre-auth=true
+
+  echo
+  echo "  Step 3/4: Alice fetches the offer"
+  run_editable ${OID4VC} offer get "${scope}"
+
+  echo
+  echo "  Step 4/4: Alice redeems the Airline Ticket offer"
+  redeem_offer "${scope}" "Airline Ticket"
 }
 
 do_checkin() {
-  echo
-  echo "  Present Airline Ticket + Passport to the check-in verifier"
-  run_editable ${OID4VC} vc present \
-    --verifier "http://localhost:30200/checkin"
-}
+  local scope="oid4vc_boarding_pass_${VC_FMT}"
 
-do_boarding_pass() {
-  get_vc "oid4vc_boarding_pass_${VC_FMT}" "Boarding Pass Credential"
+  echo
+  echo "  Step 1/4: Present Airline Ticket + Passport to the check-in verifier"
+  echo
+  local cmd="oid4vc vc present --verifier \"http://${EXTERNAL_IP}:30200/checkin\""
+  vared -p "  \$ " cmd
+  echo
+
+  local expanded="${cmd/#oid4vc /${OID4VC} }"
+  local checkin_json
+  checkin_json=$(eval "${expanded}") || return 1
+
+  local bp_cred_id=$(echo "${checkin_json}" | jq -r '.boardingPass.credentialId // empty')
+  if [[ -z "${bp_cred_id}" ]]; then
+    echo "  Check-in failed:"
+    echo "${checkin_json}" | jq . 2>/dev/null || echo "  ${checkin_json}"
+    return 1
+  fi
+  echo "  Check-in approved, Boarding Pass: ${bp_cred_id}"
+
+  # Set credentialId on scope and checkin user
+  set_scope_cred_id "${scope}" "${bp_cred_id}"
+  local checkin_id=$(kcadm get users -r "${REALM}" -q username=checkin --fields id 2>/dev/null \
+    | jq -r '.[0].id')
+  kcadm update "users/${checkin_id}" -r "${REALM}" \
+    -s "attributes.credentialId=[\"${bp_cred_id}\"]"
+
+  echo
+  echo "  Step 2/4: Check-in creates a pre-auth boarding pass offer"
+  run_headless ${OID4VC} login \
+    --realm "${REALM}" --user "checkin" --password "password"
+  run_editable ${OID4VC} offer create \
+    --user "checkin" \
+    --target-user "checkin" \
+    --store-for "alice" \
+    --credential-configuration "${scope}" \
+    --pre-auth=true
+
+  echo
+  echo "  Step 3/4: Alice fetches the offer"
+  run_editable ${OID4VC} offer get "${scope}"
+
+  echo
+  echo "  Step 4/4: Alice redeems the Boarding Pass offer"
+  redeem_offer "${scope}" "Boarding Pass"
 }
 
 do_gate() {
   echo
   echo "  Present Boarding Pass + Passport to the gate verifier"
   run_editable ${OID4VC} vc present \
-    --verifier "http://localhost:30300/gate"
+    --verifier "http://${EXTERNAL_IP}:30300/gate"
 }
 
 do_show_vc() {
   echo
   echo "  Show stored verifiable credentials"
-  run_editable ${OID4VC} show vc
+  run_headless ${OID4VC} show vc
 }
 
-next="0"
+do_show_offer() {
+  echo
+  echo "  Show stored credential offers"
+  run_headless ${OID4VC} show offer
+}
+
+next="1"
 
 while true; do
   echo
@@ -126,29 +272,27 @@ while true; do
   echo "  OID4VC Airport Demo              [${vc_fmt_label}]"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   echo
-  echo "  0 - Show verifiable credentials"
-  echo "  1 - Get a passport credential"
-  echo "  2 - Make an airline booking"
-  echo "  3 - Get the airline ticket credential"
-  echo "  4 - Check in (verify ticket + passport)"
-  echo "  5 - Get the boarding pass credential"
-  echo "  6 - Board at the gate (verify boarding pass + passport)"
+  echo "  o - Show credential offers"
+  echo "  c - Show verifiable credentials"
   echo "  f - Switch VC format (jwt/sd)"
+  echo "  1 - Get a passport credential"
+  echo "  2 - Book a flight and get the airline ticket"
+  echo "  3 - Check in and get the boarding pass"
+  echo "  4 - Board at the gate (verify boarding pass + passport)"
   echo "  q - Quit"
   echo
   read -r "choice?  Choose an option [${next}]: "
   choice="${choice:-${next}}"
 
   case "${choice}" in
-    0) do_show_vc; next="1" ;;
+    c) do_show_vc ;;
+    o) do_show_offer ;;
+    f) if [[ "${VC_FMT}" == "jwt" ]]; then VC_FMT="sd"; else VC_FMT="jwt"; fi ;;
     1) do_passport; next="2" ;;
     2) do_booking; next="3" ;;
-    3) do_ticket; next="4" ;;
-    4) do_checkin; next="5" ;;
-    5) do_boarding_pass; next="6" ;;
-    6) do_gate; next="q" ;;
-    f|F) if [[ "${VC_FMT}" == "jwt" ]]; then VC_FMT="sd"; else VC_FMT="jwt"; fi ;;
-    q|Q) echo; echo "  Bye."; break ;;
+    3) do_checkin; next="4" ;;
+    4) do_gate; next="q" ;;
+    q) echo; echo "  Bye."; break ;;
     *) echo "  Invalid option." ;;
   esac
 done

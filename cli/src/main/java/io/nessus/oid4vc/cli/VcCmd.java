@@ -35,10 +35,10 @@ class VcCmd implements Runnable {
     @Command(name = "get", description = "Fetch a verifiable credential")
     static class Get implements Callable<Integer> {
 
-        @Option(names = "--credential-id", description = "Credential identifier from authorization_details")
+        @Option(names = "--credential-identifier", description = "Credential identifier from authorization_details")
         String credId;
 
-        @Option(names = "--credential-configuration-id", description = "Credential configuration (e.g. oid4vc_natural_person_jwt)")
+        @Option(names = "--credential-configuration", description = "Credential configuration (e.g. oid4vc_natural_person_jwt)")
         String credConfigId;
 
         @Option(names = "--key", description = "Holder key name (defaults to default key for algo)")
@@ -53,7 +53,7 @@ class VcCmd implements Runnable {
         @Override
         public Integer call() {
             if (credId == null && credConfigId == null) {
-                System.err.println("Either --credential-id or --credential-configuration-id is required");
+                System.err.println("Either --credential-identifier or --credential-configuration is required");
                 return 1;
             }
             var realmName = resolveRealm(realm);
@@ -158,6 +158,9 @@ class VcCmd implements Runnable {
         @Option(names = "--verifier", required = true, description = "Verifier endpoint URL")
         String verifierUrl;
 
+        @Option(names = "--credential-id", description = "Credential identifier to pass to the verifier")
+        String credentialId;
+
         @Option(names = {"-r", "--realm"}, description = "Realm name (defaults to current realm)")
         String realm;
 
@@ -223,10 +226,11 @@ class VcCmd implements Runnable {
                     vpToken.put(entry.getKey(), vpJwt);
                 }
 
-                var resolvedUser = user != null ? user : resolveDefaultUser(wallet, realmName);
                 var responseBody = new LinkedHashMap<String, Object>();
                 responseBody.put("vp_token", vpToken);
-                responseBody.put("passenger_id", resolvedUser);
+                if (credentialId != null) {
+                    responseBody.put("credential_id", credentialId);
+                }
                 var body = MAPPER.writeValueAsString(responseBody);
 
                 var vpResponse = httpPost(responseUri, body, "application/json", null);
@@ -250,16 +254,35 @@ class VcCmd implements Runnable {
             if (credentials == null || !credentials.isArray()) return matched;
 
             for (var credQuery : credentials) {
-                var credId = credQuery.get("id").asText();
+                var queryId = credQuery.get("id").asText();
+                var typePrefix = snakeToCamel(queryId);
                 for (var entry : walletCredentials.entrySet()) {
-                    var walletKey = entry.getKey();
-                    if (walletKey.startsWith("oid4vc_" + credId) || walletKey.contains(credId)) {
-                        matched.put(credId, entry.getValue());
-                        break;
-                    }
+                    try {
+                        var jwt = SignedJWT.parse(entry.getValue());
+                        var vcNode = MAPPER.readTree(jwt.getPayload().toString()).get("vc");
+                        if (vcNode == null) continue;
+                        var types = vcNode.get("type");
+                        if (types == null || !types.isArray()) continue;
+                        for (var t : types) {
+                            var typeStr = t.asText();
+                            if (typeStr.startsWith(typePrefix) || typeStr.equals("oid4vc_" + queryId)) {
+                                matched.put(queryId, entry.getValue());
+                                break;
+                            }
+                        }
+                        if (matched.containsKey(queryId)) break;
+                    } catch (Exception ignored) {}
                 }
             }
             return matched;
+        }
+
+        private String snakeToCamel(String snake) {
+            var sb = new StringBuilder();
+            for (var part : snake.split("_")) {
+                sb.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+            }
+            return sb.toString();
         }
 
         private String buildVpJwt(String vcJwt, com.nimbusds.jose.jwk.ECKey holderKey,
@@ -280,17 +303,6 @@ class VcCmd implements Runnable {
             var signedJwt = new SignedJWT(header, claimsBuilder.build());
             signedJwt.sign(new ECDSASigner(holderKey));
             return signedJwt.serialize();
-        }
-
-        private String resolveDefaultUser(WalletState wallet, String realm) {
-            if (wallet.realms != null && wallet.realms.containsKey(realm)) {
-                var realmState = wallet.realms.get(realm);
-                if (realmState.defaultUser != null) return realmState.defaultUser;
-                if (realmState.users != null && !realmState.users.isEmpty()) {
-                    return realmState.users.keySet().iterator().next();
-                }
-            }
-            return "unknown";
         }
     }
 }

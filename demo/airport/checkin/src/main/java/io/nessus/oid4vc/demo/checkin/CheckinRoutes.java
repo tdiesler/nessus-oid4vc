@@ -57,6 +57,8 @@ public class CheckinRoutes extends RouteBuilder {
         this.store = store;
         this.graphQLHandler = new GraphQLHandler(store);
         this.port = port;
+        var keycloakUrl = System.getenv("KEYCLOAK_URL");
+        if (keycloakUrl != null) jwtVerifier.setIssuerBaseUrl(keycloakUrl);
     }
 
     @Override
@@ -123,14 +125,6 @@ public class CheckinRoutes extends RouteBuilder {
         var body = exchange.getIn().getBody(String.class);
         var request = JSON.readTree(body);
 
-        var passengerId = request.has("passenger_id") ? request.get("passenger_id").asText() : null;
-        if (passengerId == null || passengerId.isBlank()) {
-            exchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
-            exchange.getIn().setBody("{\"status\":\"denied\",\"reason\":\"passenger_id required\"}");
-            exchange.getIn().setHeader(Exchange.CONTENT_TYPE, "application/json");
-            return;
-        }
-
         var vpTokenNode = request.get("vp_token");
         if (vpTokenNode == null) {
             exchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
@@ -178,11 +172,14 @@ public class CheckinRoutes extends RouteBuilder {
         var ticket = ticketClaims.at("/vc/credentialSubject");
         var personClaims = vpToken.getCredentials("natural_person").getFirst();
 
+        var bpassId = "bpass" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+
         var firstName = personClaims.at("/vc/credentialSubject/firstName").asText("");
         var familyName = personClaims.at("/vc/credentialSubject/familyName").asText("");
         var passengerName = firstName + " " + familyName;
 
         var boardingPass = new BoardingPass(
+                bpassId,
                 passengerName,
                 ticket.path("flightNumber").asText(),
                 "14A",
@@ -191,7 +188,7 @@ public class CheckinRoutes extends RouteBuilder {
                 "G12"
         );
 
-        store.putBoardingPass(passengerId, boardingPass);
+        store.putBoardingPass(bpassId, boardingPass);
 
         var response = new LinkedHashMap<String, Object>();
         response.put("status", "approved");

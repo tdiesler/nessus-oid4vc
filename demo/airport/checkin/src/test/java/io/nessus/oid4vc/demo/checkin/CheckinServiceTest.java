@@ -11,7 +11,6 @@ import com.nimbusds.jose.jwk.gen.ECKeyGenerator;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
 
-import java.util.ArrayList;
 import org.apache.camel.CamelContext;
 import org.apache.camel.impl.DefaultCamelContext;
 import org.junit.jupiter.api.AfterAll;
@@ -92,6 +91,7 @@ class CheckinServiceTest {
         var ticketVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_airline_ticket"),
                 "credentialSubject", Map.of(
+                        "credentialId", "ticket4a2b3c",
                         "flightNumber", "BA123",
                         "passengerName", "Alice Wonderland",
                         "departureDateTime", "2026-10-15T08:30:00Z",
@@ -117,7 +117,6 @@ class CheckinServiceTest {
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
-        requestBody.put("passenger_id", "alice");
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/checkin/response"))
@@ -131,6 +130,7 @@ class CheckinServiceTest {
         assertEquals("approved", body.get("status").asText());
 
         var bp = body.get("boardingPass");
+        assertTrue(bp.get("credentialId").asText().startsWith("bpass"));
         assertEquals("Alice Wonderland", bp.get("passengerName").asText());
         assertEquals("BA123", bp.get("flightNumber").asText());
         assertEquals("2026-10-15T08:30:00Z", bp.get("departureDateTime").asText());
@@ -155,7 +155,6 @@ class CheckinServiceTest {
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
-        requestBody.put("passenger_id", "alice");
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/checkin/response"))
@@ -170,26 +169,13 @@ class CheckinServiceTest {
     }
 
     @Test
-    void checkinResponseDeniedMissingPassengerId() throws Exception {
-        var requestBody = Map.of("vp_token", Map.of("airline_ticket", "dummy"));
-
-        var req = HttpRequest.newBuilder()
-                .uri(URI.create(BASE + "/checkin/response"))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString(JSON.writeValueAsString(requestBody)))
-                .build();
-        var resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
-        assertEquals(400, resp.statusCode());
-    }
-
-    @Test
     void boardingPassAvailableViaGraphql() throws Exception {
-        store.putBoardingPass("bob", new BoardingPass(
-                "Bob Builder", "LH456", "22C", "A", "2026-11-01T10:00:00Z", "G5"));
+        store.putBoardingPass("bob_bp", new BoardingPass(
+                "bob_bp", "Bob Builder", "LH456", "22C", "A", "2026-11-01T10:00:00Z", "G5"));
 
         var graphqlQuery = """
-                {"query":"query($id: String!) { boardingPass(passengerId: $id) { passengerName flightNumber seat boardingGroup departureDateTime gate } }",
-                 "variables":{"id":"bob"}}""";
+                {"query":"query($id: String!) { boardingPass(credentialId: $id) { credentialId passengerName flightNumber seat boardingGroup departureDateTime gate } }",
+                 "variables":{"id":"bob_bp"}}""";
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/graphql"))
@@ -208,9 +194,9 @@ class CheckinServiceTest {
     }
 
     @Test
-    void graphqlNonExistentPassenger() throws Exception {
+    void graphqlNonExistentCredentialId() throws Exception {
         var graphqlQuery = """
-                {"query":"{ boardingPass(passengerId: \\"nobody\\") { passengerName } }"}""";
+                {"query":"{ boardingPass(credentialId: \\"nobody\\") { passengerName } }"}""";
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/graphql"))

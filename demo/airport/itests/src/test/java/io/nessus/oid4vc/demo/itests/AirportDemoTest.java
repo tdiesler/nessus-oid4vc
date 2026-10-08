@@ -86,13 +86,13 @@ class AirportDemoTest {
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(TICKET_URL + "/api/booking"))
                 .header("Content-Type", "application/json")
-                .header("X-Passenger-Id", "alice")
                 .POST(HttpRequest.BodyPublishers.ofString(booking))
                 .build();
         var resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, resp.statusCode(), resp.body());
 
         var body = JSON.readTree(resp.body());
+        assertTrue(body.get("credentialId").asText().startsWith("ticket"));
         assertNotNull(body.get("bookingReference"));
     }
 
@@ -105,7 +105,6 @@ class AirportDemoTest {
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
-        requestBody.put("passenger_id", "alice");
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(CHECKIN_URL + "/checkin/response"))
@@ -134,7 +133,6 @@ class AirportDemoTest {
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
-        requestBody.put("passenger_id", "alice");
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(GATE_URL + "/gate/response"))

@@ -7,16 +7,16 @@ public class TicketStore {
 
     private final Map<String, Booking> bookings = new ConcurrentHashMap<>();
 
-    public Booking getBooking(String passengerId) {
-        return bookings.get(passengerId);
+    public Booking getBooking(String credentialId) {
+        return bookings.get(credentialId);
     }
 
     public Map<String, Booking> getAllBookings() {
         return Map.copyOf(bookings);
     }
 
-    public void putBooking(String passengerId, Booking booking) {
-        bookings.put(passengerId, booking);
+    public void putBooking(String credentialId, Booking booking) {
+        bookings.put(credentialId, booking);
     }
 
     public void clear() {

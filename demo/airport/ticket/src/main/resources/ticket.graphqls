@@ -1,8 +1,9 @@
 type Query {
-    booking(passengerId: String!): Booking
+    booking(credentialId: String!): Booking
 }
 
 type Booking {
+    credentialId: String
     flightNumber: String
     route: String
     departureDateTime: String

@@ -49,15 +49,19 @@ class TicketServiceTest {
         var createReq = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/api/booking"))
                 .header("Content-Type", "application/json")
-                .header("X-Passenger-Id", "alice")
                 .POST(HttpRequest.BodyPublishers.ofString(booking))
                 .build();
         var createResp = HTTP.send(createReq, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, createResp.statusCode());
 
+        var createBody = JSON.readTree(createResp.body());
+        var credentialId = createBody.get("credentialId").asText();
+        assertTrue(credentialId.startsWith("ticket"));
+        assertNotNull(createBody.get("bookingReference").asText());
+
         var graphqlQuery = """
-            {"query":"query($id: String!) { booking(passengerId: $id) { flightNumber route departureDateTime bookingReference passengerName } }",
-             "variables":{"id":"alice"}}""";
+            {"query":"query($id: String!) { booking(credentialId: $id) { credentialId flightNumber route departureDateTime bookingReference passengerName } }",
+             "variables":{"id":"%s"}}""".formatted(credentialId);
 
         var queryReq = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/graphql"))
@@ -72,14 +76,14 @@ class TicketServiceTest {
         assertEquals("LHR-JFK", data.get("route").asText());
         assertEquals("2026-10-15T08:30:00Z", data.get("departureDateTime").asText());
         assertNotNull(data.get("bookingReference").asText());
-        assertEquals(6, data.get("bookingReference").asText().length());
+        assertEquals(4, data.get("bookingReference").asText().length());
         assertEquals("Alice Wonderland", data.get("passengerName").asText());
     }
 
     @Test
     void queryNonExistentBooking() throws Exception {
         var graphqlQuery = """
-            {"query":"{ booking(passengerId: \\"nobody\\") { flightNumber } }"}""";
+            {"query":"{ booking(credentialId: \\"nobody\\") { flightNumber } }"}""";
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/graphql"))
@@ -91,17 +95,6 @@ class TicketServiceTest {
 
         var data = JSON.readTree(resp.body()).get("data");
         assertTrue(data.get("booking").isNull());
-    }
-
-    @Test
-    void createBookingMissingPassengerId() throws Exception {
-        var req = HttpRequest.newBuilder()
-                .uri(URI.create(BASE + "/api/booking"))
-                .header("Content-Type", "application/json")
-                .POST(HttpRequest.BodyPublishers.ofString("{}"))
-                .build();
-        var resp = HTTP.send(req, HttpResponse.BodyHandlers.ofString());
-        assertEquals(400, resp.statusCode());
     }
 
     @Test
@@ -129,7 +122,7 @@ class TicketServiceTest {
     @Test
     void listAndClearBookings() throws Exception {
         store.clear();
-        store.putBooking("bob", new Booking("LH456", "FRA-MUC", "2026-11-01T10:00:00Z", "ABC123", "Bob Builder"));
+        store.putBooking("ticket_bob", new Booking("ticket_bob", "LH456", "FRA-MUC", "2026-11-01T10:00:00Z", "ABC123", "Bob Builder"));
 
         var listReq = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/api/bookings"))
@@ -138,7 +131,7 @@ class TicketServiceTest {
         var listResp = HTTP.send(listReq, HttpResponse.BodyHandlers.ofString());
         assertEquals(200, listResp.statusCode());
         var bookings = JSON.readTree(listResp.body());
-        assertEquals("LH456", bookings.get("bob").get("flightNumber").asText());
+        assertEquals("LH456", bookings.get("ticket_bob").get("flightNumber").asText());
 
         var clearReq = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/api/bookings"))

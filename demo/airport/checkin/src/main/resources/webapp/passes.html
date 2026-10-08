@@ -29,7 +29,7 @@
     <table id="passesTable">
         <thead>
             <tr>
-                <th>Passenger ID</th>
+                <th>Credential ID</th>
                 <th>Passenger Name</th>
                 <th>Flight</th>
                 <th>Seat</th>
@@ -57,9 +57,9 @@
             } else {
                 table.style.display = 'table';
                 empty.style.display = 'none';
-                for (const [pid, bp] of entries) {
+                for (const [cid, bp] of entries) {
                     const row = document.createElement('tr');
-                    row.innerHTML = `<td>${pid}</td><td>${bp.passengerName || ''}</td><td>${bp.flightNumber || ''}</td><td>${bp.seat || ''}</td><td>${bp.boardingGroup || ''}</td><td>${bp.departureDateTime || ''}</td><td>${bp.gate || ''}</td>`;
+                    row.innerHTML = `<td>${cid}</td><td>${bp.passengerName || ''}</td><td>${bp.flightNumber || ''}</td><td>${bp.seat || ''}</td><td>${bp.boardingGroup || ''}</td><td>${bp.departureDateTime || ''}</td><td>${bp.gate || ''}</td>`;
                     tbody.appendChild(row);
                 }
             }

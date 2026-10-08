@@ -27,8 +27,9 @@
     <h1>GraphQL Explorer</h1>
     <form id="graphqlForm">
         <label>Query
-            <textarea name="query" rows="9">query($id: String!) {
-  booking(passengerId: $id) {
+            <textarea name="query" rows="10">query($id: String!) {
+  booking(credentialId: $id) {
+    credentialId
     flightNumber
     route
     departureDateTime
@@ -38,13 +39,20 @@
 }</textarea>
         </label>
         <label>Variables
-            <textarea name="variables" rows="1">{"id": "alice"}</textarea>
+            <textarea name="variables" rows="1">{"id": "ticketXXXX"}</textarea>
         </label>
         <button type="submit">Run Query</button>
     </form>
     <h3>Result</h3>
     <pre id="result">—</pre>
     <script>
+        fetch('/api/bookings').then(r => r.json()).then(bookings => {
+            const ids = Object.keys(bookings);
+            if (ids.length > 0) {
+                document.querySelector('[name=variables]').value = JSON.stringify({id: ids[0]});
+            }
+        }).catch(() => {});
+
         document.getElementById('graphqlForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const form = e.target;

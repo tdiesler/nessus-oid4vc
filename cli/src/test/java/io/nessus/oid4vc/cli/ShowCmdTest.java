@@ -55,7 +55,7 @@ class ShowCmdTest extends AbstractCmdTest {
             realms.put(DEFAULT_REALM, realmState);
         } else {
             wallet = new LinkedHashMap<>();
-            wallet.put("serverUrl", SERVER_URL);
+            wallet.put("serverUrl", serverUrl != null ? serverUrl : PROBE_URL);
             wallet.put("defaultRealm", DEFAULT_REALM);
             wallet.put("realms", Map.of(DEFAULT_REALM, realmState));
         }
@@ -78,10 +78,11 @@ class ShowCmdTest extends AbstractCmdTest {
             if (proc.waitFor() != 0 || b64.isEmpty()) return;
             var password = new String(java.util.Base64.getDecoder().decode(b64));
 
+            var kcUrl = serverUrl != null ? serverUrl : PROBE_URL;
             var body = "grant_type=password&client_id=admin-cli"
                     + "&username=admin&password=" + java.net.URLEncoder.encode(password, "UTF-8");
             var req = java.net.http.HttpRequest.newBuilder()
-                    .uri(java.net.URI.create(SERVER_URL + "/realms/master/protocol/openid-connect/token"))
+                    .uri(java.net.URI.create(kcUrl + "/realms/master/protocol/openid-connect/token"))
                     .header("Content-Type", "application/x-www-form-urlencoded")
                     .POST(java.net.http.HttpRequest.BodyPublishers.ofString(body))
                     .build();
@@ -127,21 +128,21 @@ class ShowCmdTest extends AbstractCmdTest {
 
     @Test
     void showVcsByIndex() throws Exception {
-        var result = cli("show", "vc", "--credential-id", "1");
+        var result = cli("show", "vc","1");
         assertEquals(0, result.exitCode(), result.stderr());
         assertTrue(result.stdout().contains("credentialSubject"), result.stdout());
     }
 
     @Test
     void showVcsByName() throws Exception {
-        var result = cli("show", "vc", "--credential-id", "oid4vc_natural_person_jwt_0000");
+        var result = cli("show", "vc","oid4vc_natural_person_jwt_0000");
         assertEquals(0, result.exitCode(), result.stderr());
         assertTrue(result.stdout().contains("credentialSubject"), result.stdout());
     }
 
     @Test
     void showVcsInvalidIndex() throws Exception {
-        var result = cli("show", "vc", "--credential-id", "99");
+        var result = cli("show", "vc","99");
         assertNotEquals(0, result.exitCode());
         assertTrue(result.stderr().contains("out of range"), result.stderr());
     }

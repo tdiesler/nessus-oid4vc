@@ -23,11 +23,14 @@ class DemoCmd implements Runnable {
     @Command(name = "booking", description = "Create a booking via the airline ticket service")
     static class BookTicket implements Callable<Integer> {
 
-        @Option(names = "--endpoint", description = "Ticket service URL (default: http://localhost:30100)", defaultValue = "http://localhost:30100")
+        @Option(names = "--endpoint", description = "Ticket service URL")
         String endpoint;
 
-        @Option(names = "--passenger-id", required = true, description = "Passenger identifier")
-        String passengerId;
+        String resolveEndpoint() {
+            if (endpoint != null) return endpoint;
+            var host = System.getenv("EXTERNAL_IP");
+            return "http://" + (host != null ? host : "localhost") + ":30100";
+        }
 
         @Option(names = "--passenger-name", required = true, description = "Passenger full name")
         String passengerName;
@@ -51,12 +54,11 @@ class DemoCmd implements Runnable {
                         .put("passengerName", passengerName);
 
                 var body = MAPPER.writeValueAsString(booking);
-                var url = endpoint + "/api/booking";
+                var url = resolveEndpoint() + "/api/booking";
 
                 var request = HttpRequest.newBuilder()
                         .uri(URI.create(url))
                         .header("Content-Type", "application/json")
-                        .header("X-Passenger-Id", passengerId)
                         .POST(HttpRequest.BodyPublishers.ofString(body))
                         .build();
 
@@ -68,8 +70,7 @@ class DemoCmd implements Runnable {
                     return 1;
                 }
 
-                var result = MAPPER.readTree(response.body());
-                System.out.println("Booking created: " + result.get("bookingReference").asText());
+                System.out.println(response.body());
                 return 0;
             } catch (Exception ex) {
                 System.err.println("Booking failed: " + ex.getMessage());

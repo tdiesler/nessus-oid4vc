@@ -10,6 +10,7 @@
 //SOURCES KeyCmd.java
 //SOURCES LoginCmd.java
 //SOURCES LogoutCmd.java
+//SOURCES OfferCmd.java
 //SOURCES ShowCmd.java
 //SOURCES VcCmd.java
 //SOURCES WalletState.java
@@ -32,6 +33,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.Base64;
+
 
 @Command(name = "oid4vc", mixinStandardHelpOptions = true,
     subcommands = {
@@ -40,6 +43,7 @@ import java.time.Instant;
         KeyCmd.class,
         LoginCmd.class,
         LogoutCmd.class,
+        OfferCmd.class,
         ShowCmd.class,
         VcCmd.class
     })
@@ -161,6 +165,23 @@ public class RootCmd implements Runnable {
             throw new IllegalStateException("No realm specified and no default realm set. Use --realm or 'oid4vc realm use <name>'.");
         }
         return wallet.defaultRealm;
+    }
+
+    static void openQrCode(String dataUri) {
+        try {
+            var base64 = dataUri.substring(dataUri.indexOf(",") + 1);
+            var bytes = Base64.getDecoder().decode(base64);
+            var tmpFile = Files.createTempFile("qr-offer-", ".png");
+            Files.write(tmpFile, bytes);
+            var os = System.getProperty("os.name").toLowerCase();
+            String[] cmd;
+            if (os.contains("mac")) cmd = new String[]{"open", tmpFile.toString()};
+            else if (os.contains("win")) cmd = new String[]{"cmd", "/c", "start", tmpFile.toString()};
+            else cmd = new String[]{"xdg-open", tmpFile.toString()};
+            new ProcessBuilder(cmd).start();
+        } catch (Exception ex) {
+            System.err.println("QR display failed: " + ex.getMessage());
+        }
     }
 
     static void saveWallet(WalletState state) {

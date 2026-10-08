@@ -29,7 +29,7 @@
     <table id="bookingsTable">
         <thead>
             <tr>
-                <th>Passenger ID</th>
+                <th>Credential ID</th>
                 <th>Passenger Name</th>
                 <th>Flight</th>
                 <th>Route</th>
@@ -56,9 +56,9 @@
             } else {
                 table.style.display = 'table';
                 empty.style.display = 'none';
-                for (const [pid, b] of entries) {
+                for (const [cid, b] of entries) {
                     const row = document.createElement('tr');
-                    row.innerHTML = `<td>${pid}</td><td>${b.passengerName || ''}</td><td>${b.flightNumber || ''}</td><td>${b.route || ''}</td><td>${b.departureDateTime || ''}</td><td>${b.bookingReference || ''}</td>`;
+                    row.innerHTML = `<td>${cid}</td><td>${b.passengerName || ''}</td><td>${b.flightNumber || ''}</td><td>${b.route || ''}</td><td>${b.departureDateTime || ''}</td><td>${b.bookingReference || ''}</td>`;
                     tbody.appendChild(row);
                 }
             }

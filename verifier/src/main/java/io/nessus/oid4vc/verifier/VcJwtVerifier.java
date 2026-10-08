@@ -26,6 +26,11 @@ public final class VcJwtVerifier {
     private static final HttpClient HTTP = HttpClient.newHttpClient();
 
     private final Map<String, JsonNode> jwksCache = new ConcurrentHashMap<>();
+    private String issuerBaseUrl;
+
+    public void setIssuerBaseUrl(String issuerBaseUrl) {
+        this.issuerBaseUrl = issuerBaseUrl;
+    }
 
     public void verify(SignedJWT signedJwt) throws VcVerificationException {
         try {
@@ -79,7 +84,8 @@ public final class VcJwtVerifier {
     private JsonNode fetchJwks(String issuer) throws VcVerificationException {
         return jwksCache.computeIfAbsent(issuer, iss -> {
             try {
-                var certsUrl = iss + "/protocol/openid-connect/certs";
+                var jwksIssuer = remapIssuer(iss);
+                var certsUrl = jwksIssuer + "/protocol/openid-connect/certs";
                 LOG.debug("Fetching JWKS from {}", certsUrl);
                 var request = HttpRequest.newBuilder()
                         .uri(URI.create(certsUrl))
@@ -96,6 +102,13 @@ public final class VcJwtVerifier {
                 throw new RuntimeException(new VcVerificationException("Failed to fetch JWKS from " + iss + ": " + ex.getMessage(), ex));
             }
         });
+    }
+
+    private String remapIssuer(String issuer) {
+        if (issuerBaseUrl == null) return issuer;
+        var uri = URI.create(issuer);
+        var path = uri.getPath();
+        return issuerBaseUrl + path;
     }
 
     private JsonNode findKey(JsonNode jwks, String kid) {

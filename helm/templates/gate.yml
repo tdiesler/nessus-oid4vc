@@ -25,6 +25,9 @@ spec:
         - name: gate
           image: {{ .image }}:{{ .version }}
           imagePullPolicy: {{ .pullPolicy }}
+          env:
+            - name: KEYCLOAK_URL
+              value: "http://keycloak:8080"
           ports:
             - containerPort: 18100
           readinessProbe:

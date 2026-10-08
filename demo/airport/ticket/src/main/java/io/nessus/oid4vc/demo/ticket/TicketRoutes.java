@@ -35,17 +35,15 @@ public class TicketRoutes extends RouteBuilder {
                 .unmarshal().json(Booking.class)
                 .process(exchange -> {
                     var booking = exchange.getIn().getBody(Booking.class);
-                    var passengerId = exchange.getIn().getHeader("X-Passenger-Id", String.class);
-                    if (passengerId == null || passengerId.isBlank()) {
-                        exchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
-                        exchange.getIn().setBody("{\"error\":\"X-Passenger-Id header required\"}");
-                        return;
-                    }
-                    var bookingRef = UUID.randomUUID().toString().substring(0, 6).toUpperCase();
-                    var withRef = new Booking(booking.flightNumber(), booking.route(),
+                    var credentialId = "ticket" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+                    var bookingRef = UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+                    var withRef = new Booking(credentialId, booking.flightNumber(), booking.route(),
                             booking.departureDateTime(), bookingRef, booking.passengerName());
-                    store.putBooking(passengerId, withRef);
-                    exchange.getIn().setBody("{\"bookingReference\":\"" + bookingRef + "\"}");
+                    store.putBooking(credentialId, withRef);
+                    var response = JSON.createObjectNode()
+                            .put("credentialId", credentialId)
+                            .put("bookingReference", bookingRef);
+                    exchange.getIn().setBody(JSON.writeValueAsString(response));
                 })
                 .setHeader(Exchange.CONTENT_TYPE, constant("application/json"));
 

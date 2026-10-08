@@ -1,5 +1,6 @@
 package io.nessus.oid4vc.cli;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.annotation.Nonnull;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -14,13 +15,14 @@ import java.util.Arrays;
 class AbstractCmdTest {
 
     static final String DEFAULT_REALM = "oid4vci";
-    static final String SERVER_URL = "http://localhost:30800";
+    static final String PROBE_URL = "http://localhost:30800";
 
     static Path projectRoot;
     static Path walletFile;
     static boolean walletExists;
     static boolean keycloakAvailable;
     static boolean realmAvailable;
+    static String serverUrl;
 
     private static byte[] walletSnapshot;
 
@@ -47,7 +49,7 @@ class AbstractCmdTest {
 
     private static boolean checkKeycloak() {
         try {
-            var conn = (HttpURLConnection) URI.create(SERVER_URL).toURL().openConnection();
+            var conn = (HttpURLConnection) URI.create(PROBE_URL).toURL().openConnection();
             conn.setConnectTimeout(2000);
             conn.setReadTimeout(2000);
             conn.connect();
@@ -59,11 +61,15 @@ class AbstractCmdTest {
 
     private static boolean checkRealm(String realm) {
         try {
-            var url = SERVER_URL + "/realms/" + realm + "/.well-known/openid-configuration";
+            var url = PROBE_URL + "/realms/" + realm + "/.well-known/openid-configuration";
             var conn = (HttpURLConnection) URI.create(url).toURL().openConnection();
             conn.setConnectTimeout(2000);
             conn.setReadTimeout(2000);
-            return conn.getResponseCode() == 200;
+            if (conn.getResponseCode() != 200) return false;
+            var body = new String(conn.getInputStream().readAllBytes());
+            var issuer = new ObjectMapper().readTree(body).get("issuer").asText();
+            serverUrl = issuer.replaceAll("/realms/.*$", "");
+            return true;
         } catch (Exception e) {
             return false;
         }
@@ -82,7 +88,7 @@ class AbstractCmdTest {
 
     @Nonnull
     String getServerUrl() {
-        return SERVER_URL;
+        return serverUrl != null ? serverUrl : PROBE_URL;
     }
 
     @Nonnull

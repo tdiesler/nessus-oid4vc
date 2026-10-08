@@ -1,8 +1,9 @@
 type Query {
-    boardingPass(passengerId: String!): BoardingPass
+    boardingPass(credentialId: String!): BoardingPass
 }
 
 type BoardingPass {
+    credentialId: String
     passengerName: String
     flightNumber: String
     seat: String

@@ -9,6 +9,7 @@ source "${SCRIPT_DIR}/oid4vc-functions"
 VERBOSE=false
 OID4VC_VERBOSE=""
 REALM="oid4vci"
+EXTERNAL_IP="${EXTERNAL_IP:-localhost}"
 for arg in "$@"; do
   case "${arg}" in
     --verbose) VERBOSE=true; OID4VC_VERBOSE="--verbose" ;;
@@ -20,7 +21,7 @@ done
 #
 echo "Logging into Keycloak as admin ..."
 KC_ADMIN_PASSWORD="$(kubectl --context=rancher-desktop get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d)"
-kcadm config credentials --server http://localhost:30800 --realm master --user admin --password "${KC_ADMIN_PASSWORD}" >/dev/null
+kcadm config credentials --server http://${EXTERNAL_IP}:30800 --realm master --user admin --password "${KC_ADMIN_PASSWORD}" >/dev/null
 
 # Delete OID4VCI Realm
 #
@@ -55,11 +56,9 @@ if ${VERBOSE}; then echo "${RESULT}"; fi
 # Configure auto-created scopes to use ES256 (default is RS256)
 #
 for scope_name in oid4vc_natural_person_jwt oid4vc_natural_person_sd; do
-  echo "Setting signing algorithm ES256 on scope '${scope_name}' ..."
+  echo "Setting signing algorithm on scope '${scope_name}' ..."
   SCOPE_ID=$(kcadm get client-scopes -r "${REALM}" --fields id,name 2>/dev/null \
-    | python3 -c "import json,sys
-for s in json.load(sys.stdin):
-    if s['name']=='${scope_name}': print(s['id'])")
+    | jq -r ".[] | select(.name==\"${scope_name}\") | .id")
   kcadm update "client-scopes/${SCOPE_ID}" -r "${REALM}" \
     -s 'attributes."vc.credential_signing_alg"=ES256'
 done
@@ -98,18 +97,10 @@ create_vc_scope() {
       \"vc.binding_required_proof_types\": \"jwt,attestation\",
       \"vc.cryptographic_binding_methods_supported\": \"jwk\",
       \"vc.credential_signing_alg\": \"ES256\",
-      \"vc.verifiable_credential_type\": \"${vc_type}\"${sd_jwt_attrs}
+      \"vc.verifiable_credential_type\": \"${vc_type}\",
+      \"vc.policy.offer.required\": \"true\"${sd_jwt_attrs}
     }" \
     -s protocolMappers="[
-      {
-        \"name\": \"subject-id\",
-        \"protocol\": \"oid4vc\",
-        \"protocolMapper\": \"oid4vc-subject-id-mapper\",
-        \"config\": {
-          \"claim.name\": \"id\",
-          \"userAttribute\": \"username\"
-        }
-      },
       {
         \"name\": \"${mapper_name}\",
         \"protocol\": \"oid4vc\",
@@ -118,7 +109,7 @@ create_vc_scope() {
           \"claim.name\": \"${mapper_name}\",
           \"graphqlEndpoint\": \"${graphql_endpoint}\",
           \"graphqlQuery\": \"${graphql_query}\",
-          \"graphqlVariableMapping\": \"id=username\",
+          \"graphqlVariableMapping\": \"id=credentialId\",
           \"responsePath\": \"${response_path}\"
         }
       }
@@ -126,8 +117,8 @@ create_vc_scope() {
   if ${VERBOSE}; then echo "${RESULT}"; fi
 }
 
-TICKET_QUERY='query($id: String!) { booking(passengerId: $id) { flightNumber route departureDateTime bookingReference passengerName } }'
-BOARDING_QUERY='query($id: String!) { boardingPass(passengerId: $id) { passengerName flightNumber seat boardingGroup departureDateTime gate } }'
+TICKET_QUERY='query($id: String!) { booking(credentialId: $id) { credentialId flightNumber route departureDateTime bookingReference passengerName } }'
+BOARDING_QUERY='query($id: String!) { boardingPass(credentialId: $id) { credentialId passengerName flightNumber seat boardingGroup departureDateTime gate } }'
 
 # Create Airline Ticket + Boarding Pass Scopes (SD-JWT + JWT)
 #
@@ -161,6 +152,22 @@ RESULT=$(kcadm create clients -o -r "${REALM}" \
   -s attributes='{"oid4vci.enabled":"true"}')
 if ${VERBOSE}; then echo "${RESULT}"; fi
 
+# Update user profile to add credentialId attribute
+# Make firstName/lastName optional
+#
+echo "Update user profile ..."
+PROFILE=$(kcadm get users/profile -r "${REALM}" 2>/dev/null)
+PROFILE=$(echo "${PROFILE}" | jq '
+  (.attributes[] | select(.name == "firstName" or .name == "lastName")) |= del(.required)
+  | .attributes += [{
+      "name": "credentialId",
+      "displayName": "Credential ID",
+      "permissions": {"view": ["admin"], "edit": ["admin"]},
+      "multivalued": false
+    }]
+')
+echo "${PROFILE}" | kcadm update users/profile -r "${REALM}" -f -
+
 # Create Users
 #
 echo "Creating user 'max' ..."
@@ -168,7 +175,7 @@ RESULT=$(kcadm create users -i -r "${REALM}" \
   -s username="max" \
   -s firstName="Max" \
   -s lastName="Mustermann" \
-  -s email="user@email.com" \
+  -s email="max@email.com" \
   -s emailVerified="true" \
   -s enabled="true" \
   -s credentials='[{"type":"password","value":"password","temporary":false}]')
@@ -188,16 +195,52 @@ RESULT=$(kcadm create users -i -r "${REALM}" \
   -s credentials='[{"type":"password","value":"password","temporary":false}]')
 ALICE_ID="${RESULT}"
 
-for scope in oid4vc_natural_person_sd oid4vc_natural_person_jwt oid4vc_airline_ticket_sd oid4vc_airline_ticket_jwt oid4vc_boarding_pass_sd oid4vc_boarding_pass_jwt; do
+for scope in oid4vc_natural_person_sd oid4vc_natural_person_jwt; do
   echo "Assigning VC scope '${scope}' to user 'alice' ..."
   kcadm create "users/${ALICE_ID}/vc/credentials" -r "${REALM}" \
+    -s "credentialScopeName=${scope}"
+done
+
+echo "Creating user 'airline' ..."
+RESULT=$(kcadm create users -i -r "${REALM}" \
+  -s username="airline" \
+  -s email="airline@email.com" \
+  -s emailVerified="true" \
+  -s enabled="true" \
+  -s credentials='[{"type":"password","value":"password","temporary":false}]')
+AIRLINE_ID="${RESULT}"
+
+echo "Assigning role 'credential-offer-create' to user 'airline' ..."
+kcadm add-roles -r "${REALM}" --uusername "airline" --rolename "credential-offer-create"
+
+for scope in oid4vc_airline_ticket_sd oid4vc_airline_ticket_jwt; do
+  echo "Assigning VC scope '${scope}' to user 'airline' ..."
+  kcadm create "users/${AIRLINE_ID}/vc/credentials" -r "${REALM}" \
+    -s "credentialScopeName=${scope}"
+done
+
+echo "Creating user 'checkin' ..."
+RESULT=$(kcadm create users -i -r "${REALM}" \
+  -s username="checkin" \
+  -s email="checkin@email.com" \
+  -s emailVerified="true" \
+  -s enabled="true" \
+  -s credentials='[{"type":"password","value":"password","temporary":false}]')
+CHECKIN_ID="${RESULT}"
+
+echo "Assigning role 'credential-offer-create' to user 'checkin' ..."
+kcadm add-roles -r "${REALM}" --uusername "checkin" --rolename "credential-offer-create"
+
+for scope in oid4vc_boarding_pass_sd oid4vc_boarding_pass_jwt; do
+  echo "Assigning VC scope '${scope}' to user 'checkin' ..."
+  kcadm create "users/${CHECKIN_ID}/vc/credentials" -r "${REALM}" \
     -s "credentialScopeName=${scope}"
 done
 
 # Configure wallet defaults
 #
 rm -f .config/wallet.json
-${OID4VC} ${OID4VC_VERBOSE} config --server "http://localhost:30800" --realm "${REALM}" --client "oid4vci-client"
+${OID4VC} ${OID4VC_VERBOSE} config --server "http://${EXTERNAL_IP}:30800" --realm "${REALM}" --client "oid4vci-client"
 
 # Holder Key
 #
@@ -207,9 +250,19 @@ ${OID4VC} ${OID4VC_VERBOSE} key create --user "alice" --algo "ES256"
 #
 for scope in "oid4vc_natural_person_jwt" "oid4vc_natural_person_sd"; do
   ${OID4VC} ${OID4VC_VERBOSE} login --realm "${REALM}" --client "oid4vci-client" --user "alice" --password "password" --scope "${scope}"
-  vc_jwt=$(${OID4VC} ${OID4VC_VERBOSE} vc get --credential-id "${scope}_0000")
+  vc_jwt=$(${OID4VC} ${OID4VC_VERBOSE} vc get --credential-identifier "${scope}_0000")
   echo "Credential: ${vc_jwt}"
   decode_vc "${vc_jwt}"
+done
+
+# Enforce credential-offer-required on auto-created natural person scopes
+#
+for scope_name in oid4vc_natural_person_jwt oid4vc_natural_person_sd; do
+  echo "Setting offer-required on scope '${scope_name}' ..."
+  SCOPE_ID=$(kcadm get client-scopes -r "${REALM}" --fields id,name 2>/dev/null \
+    | jq -r ".[] | select(.name==\"${scope_name}\") | .id")
+  kcadm update "client-scopes/${SCOPE_ID}" -r "${REALM}" \
+    -s 'attributes."vc.policy.offer.required"=true'
 done
 
 echo "Realm setup complete"

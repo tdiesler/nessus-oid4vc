@@ -14,6 +14,7 @@ import static io.nessus.oid4vc.cli.RootCmd.*;
     subcommands = {
         ShowCmd.ClientShow.class,
         ShowCmd.KeyShow.class,
+        ShowCmd.OfferShow.class,
         ShowCmd.RealmShow.class,
         ShowCmd.ScopeShow.class,
         ShowCmd.UserShow.class,
@@ -113,6 +114,76 @@ class ShowCmd implements Runnable {
                         isDefault ? "  [default]" : "");
             }
             return 0;
+        }
+    }
+
+    @Command(name = "offer", description = "Show stored credential offers")
+    static class OfferShow implements Callable<Integer> {
+
+        @CommandLine.Parameters(index = "0", arity = "0..1", description = "Credential configuration ID or index number (omit to list all)")
+        String credConfigId;
+
+        @Option(names = {"-r", "--realm"}, description = "Realm name (defaults to current realm)")
+        String realm;
+
+        @Option(names = {"-u", "--user"}, description = "Username (defaults to realm's default user)")
+        String user;
+
+        @Override
+        public Integer call() {
+            var realmName = resolveRealm(realm);
+            var wallet = loadWallet();
+            var conn = resolveConnection(wallet, realmName, user);
+
+            if (conn.offers == null || conn.offers.isEmpty()) {
+                System.out.println("No offers stored.");
+                return 0;
+            }
+
+            if (credConfigId != null) {
+                return showOffer(conn);
+            }
+            return listOffers(conn);
+        }
+
+        private Integer listOffers(WalletState.Connection conn) {
+            int idx = 1;
+            for (var entry : conn.offers.entrySet()) {
+                var id = entry.getKey();
+                var offer = entry.getValue();
+                var status = offer.containsKey("offerUri") ? "pending" : "fetched";
+                System.out.printf("  %d  %-40s  [%s]%n", idx++, id, status);
+            }
+            return 0;
+        }
+
+        private Integer showOffer(WalletState.Connection conn) {
+            var resolvedKey = credConfigId;
+            try {
+                int idx = Integer.parseInt(credConfigId);
+                var keys = conn.offers.keySet().toArray(new String[0]);
+                if (idx < 1 || idx > keys.length) {
+                    System.err.println("Index " + idx + " out of range (1-" + keys.length + ").");
+                    return 1;
+                }
+                resolvedKey = keys[idx - 1];
+            } catch (NumberFormatException ignored) {}
+
+            if (!conn.offers.containsKey(resolvedKey)) {
+                System.err.println("No offer '" + resolvedKey + "'. Run 'oid4vc show offer' to list.");
+                return 1;
+            }
+
+            try {
+                var offer = conn.offers.get(resolvedKey);
+                System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(offer));
+                var qrCode = offer.get("qrCode");
+                if (qrCode != null) openQrCode(qrCode.toString());
+                return 0;
+            } catch (Exception ex) {
+                System.err.println("Failed to display offer: " + ex.getMessage());
+                return 1;
+            }
         }
     }
 
@@ -233,7 +304,7 @@ class ShowCmd implements Runnable {
     @Command(name = "vc", description = "Show stored verifiable credentials")
     static class VcShow implements Callable<Integer> {
 
-        @Option(names = "--credential-id", description = "Credential key or index number (omit to list all)")
+        @CommandLine.Parameters(index = "0", arity = "0..1", description = "Credential key or index number (omit to list all)")
         String credId;
 
         @Option(names = {"-r", "--realm"}, description = "Realm name (defaults to current realm)")

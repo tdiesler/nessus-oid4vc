@@ -11,16 +11,21 @@ images: build
 	docker build -t nessus/oid4vc-demo-gate:1.0.0-SNAPSHOT demo/airport/gate
 
 keycloak-login:
-	$(eval KC_ADMIN_PASSWORD := $(shell $(KUBECTL) get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d))
-	bin/oid4vc login --server http://localhost:30800 --password "$(KC_ADMIN_PASSWORD)"
+	@$(eval KC_ADMIN_PASSWORD := $(shell $(KUBECTL) get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d))
+	@bin/oid4vc login --server http://localhost:30800 --password "$(KC_ADMIN_PASSWORD)"
 
 keycloak-setup:
-	bin/oid4vci-setup
+	scripts/oid4vc-setup
 
 keycloak-mapper-update: $(MAPPER_JAR)
 	$(KUBECTL) cp $(MAPPER_JAR) busybox:/providers/
 	$(KUBECTL) rollout restart statefulset keycloak
 	$(KUBECTL) rollout status statefulset keycloak --timeout=60s
 
+HELM_SET :=
+ifdef EXTERNAL_IP
+  HELM_SET += --set deployments.keycloak.externalIP=$(EXTERNAL_IP)
+endif
+
 upgrade: images
-	helm upgrade --kube-context=$(KUBE_CONTEXT) --install nessus-services ./helm -f ./helm/values-services-dev.yaml
+	helm upgrade --kube-context=$(KUBE_CONTEXT) --install nessus-services ./helm -f ./helm/values-services-dev.yaml $(HELM_SET)
