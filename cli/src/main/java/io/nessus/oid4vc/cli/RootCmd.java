@@ -24,6 +24,9 @@ import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -32,8 +35,11 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.HashSet;
+import java.util.Set;
 
 
 @Command(name = "oid4vc", mixinStandardHelpOptions = true,
@@ -191,5 +197,44 @@ public class RootCmd implements Runnable {
         } catch (Exception ex) {
             throw new RuntimeException("Failed to save wallet: " + ex.getMessage(), ex);
         }
+    }
+
+    static boolean isSdJwt(String credential) {
+        return credential != null && credential.contains("~");
+    }
+
+    static JsonNode decodeSdJwtClaims(String sdJwtString) throws Exception {
+        String[] parts = sdJwtString.split("~", -1);
+        String issuerJwt = parts[0];
+
+        var jwtParts = issuerJwt.split("\\.");
+        var payloadBytes = Base64.getUrlDecoder().decode(jwtParts[1]);
+        var result = (ObjectNode) MAPPER.readTree(new String(payloadBytes, StandardCharsets.UTF_8));
+
+        Set<String> sdHashes = new HashSet<>();
+        var sdArray = result.get("_sd");
+        if (sdArray != null && sdArray.isArray()) {
+            for (var hash : sdArray) sdHashes.add(hash.asText());
+        }
+        var hashAlg = result.path("_sd_alg").asText("sha-256");
+        var javaAlg = hashAlg.replace("sha-", "SHA-").replace("sha3-", "SHA3-");
+
+        for (int i = 1; i < parts.length; i++) {
+            if (parts[i].isEmpty()) continue;
+            if (i == parts.length - 1 && parts[i].contains(".")) continue;
+            var decoded = Base64.getUrlDecoder().decode(parts[i]);
+            var disclosure = MAPPER.readTree(new String(decoded, StandardCharsets.UTF_8));
+            if (!disclosure.isArray() || disclosure.size() < 3) continue;
+
+            var disclosureHash = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                MessageDigest.getInstance(javaAlg).digest(parts[i].getBytes(StandardCharsets.UTF_8)));
+            if (sdHashes.contains(disclosureHash)) {
+                result.set(disclosure.get(1).asText(), disclosure.get(2));
+            }
+        }
+
+        result.remove("_sd");
+        result.remove("_sd_alg");
+        return result;
     }
 }

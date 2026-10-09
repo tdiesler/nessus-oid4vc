@@ -1,11 +1,42 @@
 #!/bin/zsh
 
 decode_vc() {
-  local jwt="$1"
+  local cred="$1"
   python3 -c "
-import base64, json, sys
-payload = '${jwt}'.split('.')[1]
-payload += '=' * (4 - len(payload) % 4)
-print(json.dumps(json.loads(base64.urlsafe_b64decode(payload)), indent=2))
-"
+import base64, hashlib, json, sys
+
+cred = sys.argv[1]
+
+def b64url_decode(s):
+    s += '=' * (4 - len(s) % 4)
+    return base64.urlsafe_b64decode(s)
+
+def decode_jwt_payload(jwt):
+    return json.loads(b64url_decode(jwt.split('.')[1]))
+
+if '~' in cred:
+    parts = cred.split('~')
+    payload = decode_jwt_payload(parts[0])
+    print(json.dumps(payload, indent=2))
+
+    hash_alg = payload.get('_sd_alg', 'sha-256')
+    disclosures = []
+    for p in parts[1:]:
+        if not p or '.' in p:
+            continue
+        disc = json.loads(b64url_decode(p))
+        h = base64.urlsafe_b64encode(
+            hashlib.sha256(p.encode()).digest()
+        ).rstrip(b'=').decode()
+        disclosures.append((disc[0], disc[1], disc[2], h))
+
+    if disclosures:
+        print()
+        print('Disclosures:')
+        for salt, key, value, h in disclosures:
+            val = json.dumps(value) if not isinstance(value, str) else value
+            print(f'  [\"{salt}\", \"{key}\", {val}] => {h}')
+else:
+    print(json.dumps(decode_jwt_payload(cred), indent=2))
+" "${cred}"
 }

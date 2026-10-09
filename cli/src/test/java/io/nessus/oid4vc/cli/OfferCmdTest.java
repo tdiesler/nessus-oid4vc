@@ -53,6 +53,7 @@ class OfferCmdTest extends AbstractCmdTest {
         var createResult = cli("offer", "create",
                 "--credential-configuration", credConfigId,
                 "--target-user", "alice",
+                "--pre-auth=true",
                 "--user", "max");
         assertEquals(0, createResult.exitCode(), createResult.stderr());
 
@@ -129,6 +130,7 @@ class OfferCmdTest extends AbstractCmdTest {
         var createResult = cli("offer", "create",
                 "--credential-configuration", credConfigId,
                 "--target-user", "alice",
+                "--pre-auth=true",
                 "--user", "max");
         assertEquals(0, createResult.exitCode(), createResult.stderr());
 

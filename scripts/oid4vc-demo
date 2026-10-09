@@ -22,131 +22,12 @@ if [[ "${1:-}" == "--restart" ]]; then
 
   shift
 fi
+
 REALM="${1:-oid4vci}"
-VC_FMT="jwt"
+VC_FMT="sd"
+next="1"
 
-format_cmd() {
-  local display="" prev_was_option=false
-  for arg in "$@"; do
-    if [[ "${arg}" == "${OID4VC}" ]]; then
-      display+="oid4vc "
-      prev_was_option=false
-    elif [[ "${arg}" == --* ]]; then
-      display+="${arg} "
-      prev_was_option=true
-    elif ${prev_was_option}; then
-      display+="\"${arg}\" "
-      prev_was_option=false
-    else
-      display+="${arg} "
-      prev_was_option=false
-    fi
-  done
-  echo "${display% }"
-}
-
-run_headless() {
-  echo
-  echo "  \$ $(format_cmd "$@")"
-  echo
-  "$@"
-}
-
-run_editable() {
-  local cmd="$(format_cmd "$@")"
-
-  echo
-  vared -p "  \$ " cmd
-  echo
-
-  local expanded="${cmd/#oid4vc /${OID4VC} }"
-  eval "${expanded}"
-}
-
-get_vc() {
-  local scope="$1"
-  local label="$2"
-
-  echo
-  echo "  Step 1/2: Login as Alice with scope ${scope}"
-  run_editable ${OID4VC} login \
-    --browser \
-    --user "alice" \
-    --scope "${scope}"
-
-  echo
-  echo "  Step 2/2: Request the ${label}"
-  echo
-  local cmd="oid4vc vc get --credential-identifier \"${scope}_0000\""
-  vared -p "  \$ " cmd
-  echo
-
-  local expanded="${cmd/#oid4vc /${OID4VC} }"
-  vc_jwt=$(eval "${expanded}")
-  echo
-  echo "  Decoded Verifiable Credential:"
-  echo
-  decode_vc "${vc_jwt}"
-}
-
-do_passport() {
-  local scope="oid4vc_natural_person_${VC_FMT}"
-
-  echo
-  echo "  Step 1/4: Max, employed by government, creates an auth-code grant credential offer for Alice"
-  run_headless ${OID4VC} login \
-    --realm "${REALM}" --user "max" --password "password"
-  run_editable ${OID4VC} offer create \
-    --user "max" \
-    --target-user "alice" \
-    --credential-configuration "${scope}" \
-    --pre-auth=false
-
-  echo
-  echo "  Step 2/4: Alice fetches the offer"
-  run_editable ${OID4VC} offer get "${scope}"
-
-  echo
-  echo "  Step 3/4: Alice logs in to authorize"
-  run_editable ${OID4VC} login \
-    --user "alice" \
-    --scope "${scope}" \
-    --browser
-
-  echo
-  echo "  Step 4/4: Alice redeems the offer"
-  redeem_offer "${scope}" "Passport"
-}
-
-redeem_offer() {
-  local scope="$1"
-  local label="$2"
-
-  echo
-  echo "  Redeem the ${label} offer"
-  echo
-  local cmd="oid4vc offer redeem \"${scope}\""
-  vared -p "  \$ " cmd
-  echo
-
-  local expanded="${cmd/#oid4vc /${OID4VC} }"
-  vc_jwt=$(eval "${expanded}")
-  echo
-  echo "  Decoded Verifiable Credential:"
-  echo
-  decode_vc "${vc_jwt}"
-}
-
-set_scope_cred_id() {
-  local scope_name="$1"
-  local cred_id="$2"
-  local sid=$(kcadm get client-scopes -r "${REALM}" --fields id,name 2>/dev/null \
-    | jq -r ".[] | select(.name==\"${scope_name}\") | .id")
-  if [[ -n "${sid}" ]]; then
-    kcadm update "client-scopes/${sid}" -r "${REALM}" \
-      -s "attributes.\"vc.credential_identifier\"=${cred_id}"
-  fi
-}
+# Menu Actions ---------------------------------------------------------------------------------------------------------
 
 do_booking() {
   local scope="oid4vc_airline_ticket_${VC_FMT}"
@@ -167,8 +48,7 @@ do_booking() {
   echo "  Booking: ${booking_ref}, Ticket: ${cred_id}"
   echo "  http://${EXTERNAL_IP}:30100/bookings.html"
 
-  # Set credentialId on scope and airline user
-  set_scope_cred_id "${scope}" "${cred_id}"
+  _set_scope_cred_id "${scope}" "${cred_id}"
   local airline_id=$(kcadm get users -r "${REALM}" -q username=airline --fields id 2>/dev/null \
     | jq -r '.[0].id')
   kcadm update "users/${airline_id}" -r "${REALM}" \
@@ -176,22 +56,23 @@ do_booking() {
 
   echo
   echo "  Step 2/4: Airline creates a pre-auth credential offer"
-  run_headless ${OID4VC} login \
+  _run_headless ${OID4VC} login \
     --realm "${REALM}" --user "airline" --password "password"
-  run_editable ${OID4VC} offer create \
+  _run_editable ${OID4VC} offer create \
     --user "airline" \
     --target-user "airline" \
     --store-for "alice" \
     --credential-configuration "${scope}" \
+    --type=uri_qr \
     --pre-auth=true
 
   echo
   echo "  Step 3/4: Alice fetches the offer"
-  run_editable ${OID4VC} offer get "${scope}"
+  _run_editable ${OID4VC} offer get "${scope}"
 
   echo
   echo "  Step 4/4: Alice redeems the Airline Ticket offer"
-  redeem_offer "${scope}" "Airline Ticket"
+  _redeem_offer "${scope}" "Airline Ticket"
 }
 
 do_checkin() {
@@ -216,8 +97,7 @@ do_checkin() {
   fi
   echo "  Check-in approved, Boarding Pass: ${bp_cred_id}"
 
-  # Set credentialId on scope and checkin user
-  set_scope_cred_id "${scope}" "${bp_cred_id}"
+  _set_scope_cred_id "${scope}" "${bp_cred_id}"
   local checkin_id=$(kcadm get users -r "${REALM}" -q username=checkin --fields id 2>/dev/null \
     | jq -r '.[0].id')
   kcadm update "users/${checkin_id}" -r "${REALM}" \
@@ -225,74 +105,203 @@ do_checkin() {
 
   echo
   echo "  Step 2/4: Check-in creates a pre-auth boarding pass offer"
-  run_headless ${OID4VC} login \
+  _run_headless ${OID4VC} login \
     --realm "${REALM}" --user "checkin" --password "password"
-  run_editable ${OID4VC} offer create \
+  _run_editable ${OID4VC} offer create \
     --user "checkin" \
     --target-user "checkin" \
     --store-for "alice" \
     --credential-configuration "${scope}" \
+    --type=uri_qr \
     --pre-auth=true
 
   echo
   echo "  Step 3/4: Alice fetches the offer"
-  run_editable ${OID4VC} offer get "${scope}"
+  _run_editable ${OID4VC} offer get "${scope}"
 
   echo
   echo "  Step 4/4: Alice redeems the Boarding Pass offer"
-  redeem_offer "${scope}" "Boarding Pass"
+  _redeem_offer "${scope}" "Boarding Pass"
 }
 
 do_gate() {
   echo
   echo "  Present Boarding Pass + Passport to the gate verifier"
-  run_editable ${OID4VC} vc present \
+  _run_editable ${OID4VC} vc present \
     --verifier "http://${EXTERNAL_IP}:30300/gate"
 }
 
-do_show_vc() {
+do_passport() {
+  local scope="oid4vc_natural_person_${VC_FMT}"
+
   echo
-  echo "  Show stored verifiable credentials"
-  run_headless ${OID4VC} show vc
+  echo "  Step 1/4: Max, employed by government, creates an auth-code grant credential offer for Alice"
+  _run_headless ${OID4VC} login \
+    --realm "${REALM}" --user "max" --password "password"
+  _run_editable ${OID4VC} offer create \
+    --user "max" \
+    --target-user "alice" \
+    --credential-configuration "${scope}" \
+    --type=uri_qr \
+    --pre-auth=false
+
+  echo
+  echo "  Step 2/4: Alice fetches the offer"
+  _run_editable ${OID4VC} offer get "${scope}"
+
+  echo
+  echo "  Step 3/4: Alice logs in to authorize"
+  _run_editable ${OID4VC} login \
+    --user "alice" \
+    --scope "${scope}" \
+    --browser
+
+  echo
+  echo "  Step 4/4: Alice redeems the offer"
+  _redeem_offer "${scope}" "Passport"
 }
 
 do_show_offer() {
   echo
   echo "  Show stored credential offers"
-  run_headless ${OID4VC} show offer
+  _run_headless ${OID4VC} show offer
 }
 
-next="1"
+do_show_vc() {
+  echo
+  echo "  Show stored verifiable credentials"
+  _run_headless ${OID4VC} show vc
+}
 
-while true; do
-  echo
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  local vc_fmt_label="jwt_vc_json"
-  if [[ "${VC_FMT}" == "sd" ]]; then vc_fmt_label="dc+sd-jwt"; fi
-  echo "  OID4VC Airport Demo              [${vc_fmt_label}]"
-  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-  echo
-  echo "  o - Show credential offers"
-  echo "  c - Show verifiable credentials"
-  echo "  f - Switch VC format (jwt/sd)"
-  echo "  1 - Get a passport credential"
-  echo "  2 - Book a flight and get the airline ticket"
-  echo "  3 - Check in and get the boarding pass"
-  echo "  4 - Board at the gate (verify boarding pass + passport)"
-  echo "  q - Quit"
-  echo
-  read -r "choice?  Choose an option [${next}]: "
-  choice="${choice:-${next}}"
+main() {
+  while true; do
+    echo
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    local vc_fmt_label="jwt_vc_json"
+    if [[ "${VC_FMT}" == "sd" ]]; then vc_fmt_label="dc+sd-jwt"; fi
+    echo "  OID4VC Airport Demo              [${vc_fmt_label}]"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo
+    echo "  o - Show credential offers"
+    echo "  c - Show verifiable credentials"
+    echo "  f - Switch VC format (jwt/sd)"
+    echo "  1 - Get a passport credential"
+    echo "  2 - Book a flight and get the airline ticket"
+    echo "  3 - Check in and get the boarding pass"
+    echo "  4 - Board at the gate (verify boarding pass + passport)"
+    echo "  q - Quit"
+    echo
+    read -r "choice?  Choose an option [${next}]: "
+    choice="${choice:-${next}}"
 
-  case "${choice}" in
-    c) do_show_vc ;;
-    o) do_show_offer ;;
-    f) if [[ "${VC_FMT}" == "jwt" ]]; then VC_FMT="sd"; else VC_FMT="jwt"; fi ;;
-    1) do_passport; next="2" ;;
-    2) do_booking; next="3" ;;
-    3) do_checkin; next="4" ;;
-    4) do_gate; next="q" ;;
-    q) echo; echo "  Bye."; break ;;
-    *) echo "  Invalid option." ;;
-  esac
-done
+    case "${choice}" in
+      c) do_show_vc ;;
+      o) do_show_offer ;;
+      f) if [[ "${VC_FMT}" == "jwt" ]]; then VC_FMT="sd"; else VC_FMT="jwt"; fi ;;
+      1) do_passport; next="2" ;;
+      2) do_booking; next="3" ;;
+      3) do_checkin; next="4" ;;
+      4) do_gate; next="q" ;;
+      q) echo; echo "  Bye."; break ;;
+      *) echo "  Invalid option." ;;
+    esac
+  done
+}
+
+# Internal -------------------------------------------------------------------------------------------------------------
+
+_format_cmd() {
+  local display="" prev_was_option=false
+  for arg in "$@"; do
+    if [[ "${arg}" == "${OID4VC}" ]]; then
+      display+="oid4vc "
+      prev_was_option=false
+    elif [[ "${arg}" == --* ]]; then
+      display+="${arg} "
+      prev_was_option=true
+    elif ${prev_was_option}; then
+      display+="\"${arg}\" "
+      prev_was_option=false
+    else
+      display+="${arg} "
+      prev_was_option=false
+    fi
+  done
+  echo "${display% }"
+}
+
+_get_vc() {
+  local scope="$1"
+  local label="$2"
+
+  echo
+  echo "  Step 1/2: Login as Alice with scope ${scope}"
+  _run_editable ${OID4VC} login \
+    --browser \
+    --user "alice" \
+    --scope "${scope}"
+
+  echo
+  echo "  Step 2/2: Request the ${label}"
+  echo
+  local cmd="oid4vc vc get --credential-identifier \"${scope}_0000\""
+  vared -p "  \$ " cmd
+  echo
+
+  local expanded="${cmd/#oid4vc /${OID4VC} }"
+  vc_jwt=$(eval "${expanded}")
+  echo
+  echo "  Decoded Verifiable Credential:"
+  echo
+  decode_vc "${vc_jwt}"
+}
+
+_redeem_offer() {
+  local scope="$1"
+  local label="$2"
+
+  echo
+  echo "  Redeem the ${label} offer"
+  echo
+  local cmd="oid4vc offer redeem \"${scope}\""
+  vared -p "  \$ " cmd
+  echo
+
+  local expanded="${cmd/#oid4vc /${OID4VC} }"
+  vc_jwt=$(eval "${expanded}")
+  echo
+  echo "  Decoded Verifiable Credential:"
+  echo
+  decode_vc "${vc_jwt}"
+}
+
+_run_editable() {
+  local cmd="$(_format_cmd "$@")"
+
+  echo
+  vared -p "  \$ " cmd
+  echo
+
+  local expanded="${cmd/#oid4vc /${OID4VC} }"
+  eval "${expanded}"
+}
+
+_run_headless() {
+  echo
+  echo "  \$ $(_format_cmd "$@")"
+  echo
+  "$@"
+}
+
+_set_scope_cred_id() {
+  local scope_name="$1"
+  local cred_id="$2"
+  local sid=$(kcadm get client-scopes -r "${REALM}" --fields id,name 2>/dev/null \
+    | jq -r ".[] | select(.name==\"${scope_name}\") | .id")
+  if [[ -n "${sid}" ]]; then
+    kcadm update "client-scopes/${sid}" -r "${REALM}" \
+      -s "attributes.\"vc.credential_identifier\"=${cred_id}"
+  fi
+}
+
+main

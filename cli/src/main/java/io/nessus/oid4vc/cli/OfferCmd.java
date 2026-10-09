@@ -36,11 +36,14 @@ class OfferCmd implements Runnable {
         @Option(names = "--credential-configuration", required = true, description = "Credential configuration (e.g. oid4vc_airline_ticket_jwt)")
         String credConfigId;
 
-        @Option(names = "--pre-auth", defaultValue = "true", description = "Pre-authorized code grant offer (default: true)")
-        boolean preAuthorized;
+        @Option(names = "--pre-auth", description = "Pre-authorized code grant offer")
+        Boolean preAuthorized;
 
         @Option(names = "--target-user", required = true, description = "Username the credential offer is for")
         String targetUser;
+
+        @Option(names = "--type", description = "Response type (e.g. uri, uri_qr)")
+        String type;
 
         @Option(names = "--store-for", description = "Wallet user to store the offer for (defaults to target-user)")
         String storeFor;
@@ -65,9 +68,13 @@ class OfferCmd implements Runnable {
 
                 var url = wallet.serverUrl + "/realms/" + realmName + "/protocol/oid4vc/create-credential-offer"
                     + "?credential_configuration_id=" + URLEncoder.encode(credConfigId, StandardCharsets.UTF_8)
-                    + "&pre_authorized=" + preAuthorized
-                    + "&target_user=" + URLEncoder.encode(targetUser, StandardCharsets.UTF_8)
-                    + "&type=uri_qr&width=500&height=500";
+                    + "&target_user=" + URLEncoder.encode(targetUser, StandardCharsets.UTF_8);
+                if (preAuthorized != null) {
+                    url += "&pre_authorized=" + preAuthorized;
+                }
+                if (type != null) {
+                    url += "&type=" + URLEncoder.encode(type, StandardCharsets.UTF_8);
+                }
 
                 var response = httpGet(url, conn.accessToken);
                 if (response.statusCode() != 200) {

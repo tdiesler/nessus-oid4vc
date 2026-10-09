@@ -48,6 +48,7 @@ class VcCmdTest extends AbstractCmdTest {
         var offerCreate = cli("offer", "create",
                 "--credential-configuration", scope,
                 "--target-user", "alice",
+                "--pre-auth=true",
                 "--user", "max");
         assertEquals(0, offerCreate.exitCode(), offerCreate.stderr());
 

@@ -1,11 +1,18 @@
 package io.nessus.oid4vc.cli;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.nimbusds.jwt.SignedJWT;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
+import com.fasterxml.jackson.core.util.DefaultIndenter;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
+
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Instant;
+import java.util.Base64;
 import java.util.concurrent.Callable;
 
 import static io.nessus.oid4vc.cli.RootCmd.*;
@@ -334,24 +341,71 @@ class ShowCmd implements Runnable {
             var keys = conn.credentials.keySet().toArray(new String[0]);
             for (int i = 0; i < keys.length; i++) {
                 try {
-                    var jwt = SignedJWT.parse(conn.credentials.get(keys[i]));
-                    var claims = jwt.getJWTClaimsSet();
-                    var vc = claims.getJSONObjectClaim("vc");
+                    var credStr = conn.credentials.get(keys[i]);
+                    String typeLabel;
+                    String format;
+                    boolean expired;
 
-                    var type = vc != null ? vc.get("type") : null;
-                    var exp = claims.getExpirationTime();
-                    var expired = exp != null && exp.toInstant().isBefore(Instant.now());
+                    if (isSdJwt(credStr)) {
+                        var claims = decodeSdJwtClaims(credStr);
+                        var vct = claims.path("vct").asText(null);
+                        typeLabel = vct != null ? vct : "unknown";
+                        format = "sd-jwt";
+                        var exp = claims.path("exp").asLong(0);
+                        expired = exp > 0 && Instant.ofEpochSecond(exp).isBefore(Instant.now());
+                    } else {
+                        var jwt = SignedJWT.parse(credStr);
+                        var claims = jwt.getJWTClaimsSet();
+                        var vc = claims.getJSONObjectClaim("vc");
+                        var type = vc != null ? vc.get("type") : null;
+                        typeLabel = type != null ? type.toString() : "unknown";
+                        format = "jwt";
+                        var exp = claims.getExpirationTime();
+                        expired = exp != null && exp.toInstant().isBefore(Instant.now());
+                    }
 
-                    System.out.printf("  %d  %-40s  type=%s%s%n",
+                    System.out.printf("  %d  %-40s  type=%s  [%s]%s%n",
                             i + 1,
                             keys[i],
-                            type != null ? type : "unknown",
+                            typeLabel,
+                            format,
                             expired ? "  [EXPIRED]" : "");
                 } catch (Exception ex) {
                     System.out.printf("  %d  %-40s  (unable to parse)%n", i + 1, keys[i]);
                 }
             }
             return 0;
+        }
+
+        private void printSdJwtCredential(String sdJwtString) throws Exception {
+            var parts = sdJwtString.split("~", -1);
+            var jwtParts = parts[0].split("\\.");
+            var payloadBytes = Base64.getUrlDecoder().decode(jwtParts[1]);
+            var payload = MAPPER.readTree(new String(payloadBytes, StandardCharsets.UTF_8));
+
+            var printer = new DefaultPrettyPrinter()
+                .withArrayIndenter(DefaultIndenter.SYSTEM_LINEFEED_INSTANCE);
+            System.out.println(MAPPER.writer(printer).writeValueAsString(payload));
+
+            var hashAlg = payload.path("_sd_alg").asText("sha-256");
+            var javaAlg = hashAlg.replace("sha-", "SHA-").replace("sha3-", "SHA3-");
+
+            System.out.println();
+            System.out.println("Disclosures:");
+            for (int i = 1; i < parts.length; i++) {
+                if (parts[i].isEmpty()) continue;
+                if (i == parts.length - 1 && parts[i].contains(".")) continue;
+                var decoded = Base64.getUrlDecoder().decode(parts[i]);
+                var disclosure = MAPPER.readTree(new String(decoded, StandardCharsets.UTF_8));
+                if (!disclosure.isArray() || disclosure.size() < 3) continue;
+
+                var hash = Base64.getUrlEncoder().withoutPadding().encodeToString(
+                    MessageDigest.getInstance(javaAlg).digest(parts[i].getBytes(StandardCharsets.UTF_8)));
+                var salt = disclosure.get(0).asText();
+                var key = disclosure.get(1).asText();
+                var value = disclosure.get(2);
+                System.out.printf("  [\"%s\", \"%s\", %s] => %s%n", salt, key, value, hash);
+            }
         }
 
         private Integer showCredential(WalletState.Connection conn) {
@@ -372,9 +426,14 @@ class ShowCmd implements Runnable {
             }
 
             try {
-                var jwt = SignedJWT.parse(conn.credentials.get(resolvedKey));
-                var payload = MAPPER.readTree(jwt.getPayload().toString());
-                System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(payload));
+                var credStr = conn.credentials.get(resolvedKey);
+                if (isSdJwt(credStr)) {
+                    printSdJwtCredential(credStr);
+                } else {
+                    var jwt = SignedJWT.parse(credStr);
+                    var payload = MAPPER.readTree(jwt.getPayload().toString());
+                    System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(payload));
+                }
                 return 0;
             } catch (Exception ex) {
                 System.err.println("Failed to decode credential: " + ex.getMessage());
