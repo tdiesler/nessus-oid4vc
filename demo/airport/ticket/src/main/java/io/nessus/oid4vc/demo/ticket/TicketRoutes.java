@@ -35,14 +35,12 @@ public class TicketRoutes extends RouteBuilder {
                 .unmarshal().json(Booking.class)
                 .process(exchange -> {
                     var booking = exchange.getIn().getBody(Booking.class);
-                    var credentialId = "ticket" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
-                    var bookingRef = UUID.randomUUID().toString().substring(0, 4).toUpperCase();
-                    var withRef = new Booking(credentialId, booking.flightNumber(), booking.route(),
-                            booking.departureDateTime(), bookingRef, booking.passengerName());
-                    store.putBooking(credentialId, withRef);
+                    var ticketRef = "TK" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
+                    var withRef = new Booking(ticketRef, booking.flightNumber(), booking.route(),
+                            booking.departureDateTime(), booking.passengerName());
+                    store.putBooking(ticketRef, withRef);
                     var response = JSON.createObjectNode()
-                            .put("credentialId", credentialId)
-                            .put("bookingReference", bookingRef);
+                            .put("ticketRef", ticketRef);
                     exchange.getIn().setBody(JSON.writeValueAsString(response));
                 })
                 .setHeader(Exchange.CONTENT_TYPE, constant("application/json"));

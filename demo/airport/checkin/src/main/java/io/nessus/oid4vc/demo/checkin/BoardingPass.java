@@ -1,7 +1,7 @@
 package io.nessus.oid4vc.demo.checkin;
 
 public record BoardingPass(
-    String credentialId,
+    String boardingRef,
     String passengerName,
     String flightNumber,
     String seat,

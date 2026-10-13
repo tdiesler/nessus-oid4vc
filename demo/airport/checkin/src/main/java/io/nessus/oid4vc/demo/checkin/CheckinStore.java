@@ -7,16 +7,16 @@ public class CheckinStore {
 
     private final Map<String, BoardingPass> boardingPasses = new ConcurrentHashMap<>();
 
-    public BoardingPass getBoardingPass(String credentialId) {
-        return boardingPasses.get(credentialId);
+    public BoardingPass getBoardingPass(String boardingRef) {
+        return boardingPasses.get(boardingRef);
     }
 
     public Map<String, BoardingPass> getAllBoardingPasses() {
         return Map.copyOf(boardingPasses);
     }
 
-    public void putBoardingPass(String credentialId, BoardingPass boardingPass) {
-        boardingPasses.put(credentialId, boardingPass);
+    public void putBoardingPass(String boardingRef, BoardingPass boardingPass) {
+        boardingPasses.put(boardingRef, boardingPass);
     }
 
     public void clear() {

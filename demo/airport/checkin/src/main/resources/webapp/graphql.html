@@ -28,8 +28,8 @@
     <form id="graphqlForm">
         <label>Query
             <textarea name="query" rows="11">query($id: String!) {
-  boardingPass(credentialId: $id) {
-    credentialId
+  boardingPass(boardingRef: $id) {
+    boardingRef
     passengerName
     flightNumber
     seat

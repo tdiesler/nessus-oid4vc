@@ -39,17 +39,17 @@ class VcCmdTest extends AbstractCmdTest {
 
         var scope = "oid4vc_natural_person_jwt";
 
-        // Login as max (offer creator)
-        var maxLogin = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
-                "--user", "max", "--password", "password");
-        assertEquals(0, maxLogin.exitCode(), maxLogin.stderr());
+        // Login as iss (offer creator)
+        var issLogin = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
+                "--user", "iss", "--password", "password");
+        assertEquals(0, issLogin.exitCode(), issLogin.stderr());
 
         // Create pre-auth offer for alice
         var offerCreate = cli("offer", "create",
                 "--credential-configuration", scope,
                 "--target-user", "alice",
                 "--pre-auth=true",
-                "--user", "max");
+                "--user", "iss");
         assertEquals(0, offerCreate.exitCode(), offerCreate.stderr());
 
         // Alice fetches the offer

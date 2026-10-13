@@ -200,9 +200,9 @@ class ShowCmdTest extends AbstractCmdTest {
         assumeTrue(realmAvailable, "Keycloak realm not available");
         assertTrue(adminLoggedIn(), "Admin login failed");
 
-        var result = cli("show", "user", "--user", "max");
+        var result = cli("show", "user", "--user", "iss");
         assertEquals(0, result.exitCode(), result.stderr());
-        assertTrue(result.stdout().contains("Mustermann"), result.stdout());
+        assertTrue(result.stdout().contains("Authorized Offer Issuer"), result.stdout());
     }
 
     private boolean adminLoggedIn() {

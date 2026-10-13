@@ -44,17 +44,17 @@ class OfferCmdTest extends AbstractCmdTest {
 
         var credConfigId = "oid4vc_natural_person_jwt";
 
-        // Log in as max (has credential_offer_create role)
-        var maxLogin = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
-                "--user", "max", "--password", "password");
-        assertEquals(0, maxLogin.exitCode(), maxLogin.stderr());
+        // Log in as iss (has credential_offer_create role)
+        var issLogin = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
+                "--user", "iss", "--password", "password");
+        assertEquals(0, issLogin.exitCode(), issLogin.stderr());
 
-        // Max creates a pre-authorized offer — stored in alice's wallet
+        // Issuer creates a pre-authorized offer — stored in alice's wallet
         var createResult = cli("offer", "create",
                 "--credential-configuration", credConfigId,
                 "--target-user", "alice",
                 "--pre-auth=true",
-                "--user", "max");
+                "--user", "iss");
         assertEquals(0, createResult.exitCode(), createResult.stderr());
 
         // Verify offer URI stored in alice's wallet
@@ -121,17 +121,17 @@ class OfferCmdTest extends AbstractCmdTest {
 
         var credConfigId = "oid4vc_natural_person_jwt";
 
-        // Log in as max (has credential_offer_create role)
-        var maxLogin = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
-                "--user", "max", "--password", "password");
-        assertEquals(0, maxLogin.exitCode(), maxLogin.stderr());
+        // Log in as iss (has credential_offer_create role)
+        var issLogin = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
+                "--user", "iss", "--password", "password");
+        assertEquals(0, issLogin.exitCode(), issLogin.stderr());
 
-        // Max creates a pre-authorized offer — stored in alice's wallet
+        // Issuer creates a pre-authorized offer — stored in alice's wallet
         var createResult = cli("offer", "create",
                 "--credential-configuration", credConfigId,
                 "--target-user", "alice",
                 "--pre-auth=true",
-                "--user", "max");
+                "--user", "iss");
         assertEquals(0, createResult.exitCode(), createResult.stderr());
 
         // Show offer by index
@@ -164,17 +164,17 @@ class OfferCmdTest extends AbstractCmdTest {
 
         var credConfigId = "oid4vc_natural_person_jwt";
 
-        // Log in as max (has credential_offer_create role)
-        var maxLogin = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
-                "--user", "max", "--password", "password");
-        assertEquals(0, maxLogin.exitCode(), maxLogin.stderr());
+        // Log in as iss (has credential_offer_create role)
+        var issLogin = cli("login", "--realm", DEFAULT_REALM, "--client", "oid4vci-client",
+                "--user", "iss", "--password", "password");
+        assertEquals(0, issLogin.exitCode(), issLogin.stderr());
 
-        // Max creates an authorization code grant offer
+        // Issuer creates an authorization code grant offer
         var createResult = cli("offer", "create",
                 "--credential-configuration", credConfigId,
                 "--target-user", "alice",
                 "--pre-auth=false",
-                "--user", "max");
+                "--user", "iss");
         assertEquals(0, createResult.exitCode(), createResult.stderr());
 
         // Alice fetches the offer

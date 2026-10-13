@@ -14,6 +14,10 @@ images: build
 	docker build -t nessus/oid4vc-demo-checkin:1.0.0-SNAPSHOT demo/airport/checkin
 	docker build -t nessus/oid4vc-demo-gate:1.0.0-SNAPSHOT demo/airport/gate
 
+keycloak-build:
+	@cd $(KEYCLOAK_DIR) && ./mvnw -pl 'quarkus/dist,!crypto/fips1402,tests,testsuite/integration-arquillian/tests/base' -am -DskipTests clean install
+	@tar xzf $(KEYCLOAK_DIR)/quarkus/dist/target/keycloak-999.0.0-SNAPSHOT.tar.gz -C $(KEYCLOAK_DIR)/quarkus/dist/target
+
 keycloak-login:
 	@$(eval KC_ADMIN_PASSWORD := $(shell $(KUBECTL) get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d))
 	@bin/oid4vc login --server http://localhost:30800 --password "$(KC_ADMIN_PASSWORD)"
@@ -23,13 +27,12 @@ keycloak-mapper-update: $(MAPPER_JAR)
 	$(KUBECTL) rollout restart statefulset keycloak
 	$(KUBECTL) rollout status statefulset keycloak --timeout=60s
 
-keycloak-build:
-	@cd $(KEYCLOAK_DIR) && ./mvnw -pl 'quarkus/dist,!crypto/fips1402,tests,testsuite/integration-arquillian/tests/base' -am -DskipTests clean install
-	@tar xzf $(KEYCLOAK_DIR)/quarkus/dist/target/keycloak-999.0.0-SNAPSHOT.tar.gz -C $(KEYCLOAK_DIR)/quarkus/dist/target
-
 keycloak-image: keycloak-build
 	@cd $(KEYCLOAK_DIR)/quarkus/container && cp ../dist/target/keycloak-999.0.0-SNAPSHOT.tar.gz . && \
 		docker buildx build --platform linux/amd64 --build-arg KEYCLOAK_DIST=keycloak-999.0.0-SNAPSHOT.tar.gz -t keycloak:latest .
+
+keycloak-setup:
+	scripts/oid4vc-setup
 
 keycloak-tests:
 	@cd $(KEYCLOAK_DIR) && \

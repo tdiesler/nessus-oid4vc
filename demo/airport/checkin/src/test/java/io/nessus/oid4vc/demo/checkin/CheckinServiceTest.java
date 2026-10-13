@@ -91,12 +91,11 @@ class CheckinServiceTest {
         var ticketVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_airline_ticket"),
                 "credentialSubject", Map.of(
-                        "credentialId", "ticket4a2b3c",
+                        "ticketRef", "A3F2",
                         "flightNumber", "BA123",
                         "passengerName", "Alice Wonderland",
                         "departureDateTime", "2026-10-15T08:30:00Z",
                         "route", "LHR-JFK",
-                        "bookingReference", "ABC123",
                         "id", "alice"
                 )
         ));
@@ -130,7 +129,7 @@ class CheckinServiceTest {
         assertEquals("approved", body.get("status").asText());
 
         var bp = body.get("boardingPass");
-        assertTrue(bp.get("credentialId").asText().startsWith("bpass"));
+        assertNotNull(bp.get("boardingRef").asText());
         assertEquals("Alice Wonderland", bp.get("passengerName").asText());
         assertEquals("BA123", bp.get("flightNumber").asText());
         assertEquals("2026-10-15T08:30:00Z", bp.get("departureDateTime").asText());
@@ -170,12 +169,12 @@ class CheckinServiceTest {
 
     @Test
     void boardingPassAvailableViaGraphql() throws Exception {
-        store.putBoardingPass("bob_bp", new BoardingPass(
-                "bob_bp", "Bob Builder", "LH456", "22C", "A", "2026-11-01T10:00:00Z", "G5"));
+        store.putBoardingPass("BP01", new BoardingPass(
+                "BP01", "Bob Builder", "LH456", "22C", "A", "2026-11-01T10:00:00Z", "G5"));
 
         var graphqlQuery = """
-                {"query":"query($id: String!) { boardingPass(credentialId: $id) { credentialId passengerName flightNumber seat boardingGroup departureDateTime gate } }",
-                 "variables":{"id":"bob_bp"}}""";
+                {"query":"query($id: String!) { boardingPass(boardingRef: $id) { boardingRef passengerName flightNumber seat boardingGroup departureDateTime gate } }",
+                 "variables":{"id":"BP01"}}""";
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/graphql"))
@@ -194,9 +193,9 @@ class CheckinServiceTest {
     }
 
     @Test
-    void graphqlNonExistentCredentialId() throws Exception {
+    void graphqlNonExistentBoardingRef() throws Exception {
         var graphqlQuery = """
-                {"query":"{ boardingPass(credentialId: \\"nobody\\") { passengerName } }"}""";
+                {"query":"{ boardingPass(boardingRef: \\"nobody\\") { passengerName } }"}""";
 
         var req = HttpRequest.newBuilder()
                 .uri(URI.create(BASE + "/graphql"))

@@ -57,7 +57,7 @@
                 });
                 if (resp.ok) {
                     const result = await resp.json();
-                    res.textContent = 'Booking created: ' + result.bookingReference + ' (Ticket: ' + result.credentialId + ')';
+                    res.textContent = 'Booking created — Ticket Ref: ' + result.ticketRef;
                     res.className = 'success';
                 } else {
                     res.textContent = 'Error: ' + (await resp.text());

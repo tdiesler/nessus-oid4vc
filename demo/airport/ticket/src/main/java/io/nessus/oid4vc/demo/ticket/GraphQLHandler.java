@@ -23,15 +23,14 @@ public class GraphQLHandler {
         var wiring = newRuntimeWiring()
                 .type("Query", builder -> builder
                         .dataFetcher("booking", env -> {
-                            String credentialId = env.getArgument("credentialId");
-                            var booking = store.getBooking(credentialId);
+                            String ticketRef = env.getArgument("ticketRef");
+                            var booking = store.getBooking(ticketRef);
                             if (booking == null) return null;
                             var map = new LinkedHashMap<String, Object>();
-                            map.put("credentialId", booking.credentialId());
+                            map.put("ticketRef", booking.ticketRef());
                             map.put("flightNumber", booking.flightNumber());
                             map.put("route", booking.route());
                             map.put("departureDateTime", booking.departureDateTime());
-                            map.put("bookingReference", booking.bookingReference());
                             map.put("passengerName", booking.passengerName());
                             return map;
                         }))

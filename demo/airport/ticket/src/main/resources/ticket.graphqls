@@ -1,12 +1,11 @@
 type Query {
-    booking(credentialId: String!): Booking
+    booking(ticketRef: String!): Booking
 }
 
 type Booking {
-    credentialId: String
+    ticketRef: String
     flightNumber: String
     route: String
     departureDateTime: String
-    bookingReference: String
     passengerName: String
 }

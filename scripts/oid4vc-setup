@@ -109,7 +109,7 @@ create_vc_scope() {
           \"claim.name\": \"${mapper_name}\",
           \"graphqlEndpoint\": \"${graphql_endpoint}\",
           \"graphqlQuery\": \"${graphql_query}\",
-          \"graphqlVariableMapping\": \"id=credentialId\",
+          \"graphqlVariableMapping\": \"id=claimsRef\",
           \"responsePath\": \"${response_path}\"
         }
       }
@@ -117,8 +117,8 @@ create_vc_scope() {
   if ${VERBOSE}; then echo "${RESULT}"; fi
 }
 
-TICKET_QUERY='query($id: String!) { booking(credentialId: $id) { credentialId flightNumber route departureDateTime bookingReference passengerName } }'
-BOARDING_QUERY='query($id: String!) { boardingPass(credentialId: $id) { credentialId passengerName flightNumber seat boardingGroup departureDateTime gate } }'
+TICKET_QUERY='query($id: String!) { booking(ticketRef: $id) { ticketRef flightNumber route departureDateTime passengerName } }'
+BOARDING_QUERY='query($id: String!) { boardingPass(boardingRef: $id) { boardingRef passengerName flightNumber seat boardingGroup departureDateTime gate } }'
 
 # Create Airline Ticket + Boarding Pass Scopes (SD-JWT + JWT)
 #
@@ -152,7 +152,7 @@ RESULT=$(kcadm create clients -o -r "${REALM}" \
   -s attributes='{"oid4vci.enabled":"true"}')
 if ${VERBOSE}; then echo "${RESULT}"; fi
 
-# Update user profile to add credentialId attribute
+# Update user profile to add claimsRef attribute
 # Make firstName/lastName optional
 #
 echo "Update user profile ..."
@@ -160,8 +160,8 @@ PROFILE=$(kcadm get users/profile -r "${REALM}" 2>/dev/null)
 PROFILE=$(echo "${PROFILE}" | jq '
   (.attributes[] | select(.name == "firstName" or .name == "lastName")) |= del(.required)
   | .attributes += [{
-      "name": "credentialId",
-      "displayName": "Credential ID",
+      "name": "claimsRef",
+      "displayName": "Claims Reference",
       "permissions": {"view": ["admin"], "edit": ["admin"]},
       "multivalued": false
     }]
@@ -170,20 +170,6 @@ echo "${PROFILE}" | kcadm update users/profile -r "${REALM}" -f -
 
 # Create Users
 #
-echo "Creating user 'max' ..."
-RESULT=$(kcadm create users -i -r "${REALM}" \
-  -s username="max" \
-  -s firstName="Max" \
-  -s lastName="Mustermann" \
-  -s email="max@email.com" \
-  -s emailVerified="true" \
-  -s enabled="true" \
-  -s credentials='[{"type":"password","value":"password","temporary":false}]')
-MAX_ID="${RESULT}"
-
-echo "Assigning role 'credential-offer-create' to user 'max' ..."
-kcadm add-roles -r "${REALM}" --uusername "max" --rolename "credential-offer-create"
-
 echo "Creating user 'alice' ..."
 RESULT=$(kcadm create users -i -r "${REALM}" \
   -s username="alice" \
@@ -193,47 +179,56 @@ RESULT=$(kcadm create users -i -r "${REALM}" \
   -s emailVerified="true" \
   -s enabled="true" \
   -s credentials='[{"type":"password","value":"password","temporary":false}]')
-ALICE_ID="${RESULT}"
+ALICE_USER_ID="${RESULT}"
 
 for scope in oid4vc_natural_person_sd oid4vc_natural_person_jwt; do
   echo "Assigning VC scope '${scope}' to user 'alice' ..."
-  kcadm create "users/${ALICE_ID}/vc/credentials" -r "${REALM}" \
+  kcadm create "users/${ALICE_USER_ID}/vc/credentials" -r "${REALM}" \
     -s "credentialScopeName=${scope}"
 done
+
+echo "Creating user 'iss' ..."
+RESULT=$(kcadm create users -i -r "${REALM}" \
+  -s username="iss" \
+  -s lastName="Authorized Offer Issuer" \
+  -s email="iss@email.com" \
+  -s emailVerified="true" \
+  -s enabled="true" \
+  -s credentials='[{"type":"password","value":"password","temporary":false}]')
+ISS_USER_ID="${RESULT}"
+
+echo "Assigning role 'credential-offer-create' to user 'iss' ..."
+kcadm add-roles -r "${REALM}" --uusername "iss" --rolename "credential-offer-create"
 
 echo "Creating user 'airline' ..."
 RESULT=$(kcadm create users -i -r "${REALM}" \
   -s username="airline" \
+  -s lastName="Airline Ticket Desk" \
   -s email="airline@email.com" \
   -s emailVerified="true" \
   -s enabled="true" \
   -s credentials='[{"type":"password","value":"password","temporary":false}]')
-AIRLINE_ID="${RESULT}"
-
-echo "Assigning role 'credential-offer-create' to user 'airline' ..."
-kcadm add-roles -r "${REALM}" --uusername "airline" --rolename "credential-offer-create"
+AIRLINE_USER_ID="${RESULT}"
 
 for scope in oid4vc_airline_ticket_sd oid4vc_airline_ticket_jwt; do
   echo "Assigning VC scope '${scope}' to user 'airline' ..."
-  kcadm create "users/${AIRLINE_ID}/vc/credentials" -r "${REALM}" \
+  kcadm create "users/${AIRLINE_USER_ID}/vc/credentials" -r "${REALM}" \
     -s "credentialScopeName=${scope}"
 done
 
 echo "Creating user 'checkin' ..."
 RESULT=$(kcadm create users -i -r "${REALM}" \
   -s username="checkin" \
+  -s lastName="Airline Checkin Desk" \
   -s email="checkin@email.com" \
   -s emailVerified="true" \
   -s enabled="true" \
   -s credentials='[{"type":"password","value":"password","temporary":false}]')
-CHECKIN_ID="${RESULT}"
-
-echo "Assigning role 'credential-offer-create' to user 'checkin' ..."
-kcadm add-roles -r "${REALM}" --uusername "checkin" --rolename "credential-offer-create"
+CHECKIN_USER_ID="${RESULT}"
 
 for scope in oid4vc_boarding_pass_sd oid4vc_boarding_pass_jwt; do
   echo "Assigning VC scope '${scope}' to user 'checkin' ..."
-  kcadm create "users/${CHECKIN_ID}/vc/credentials" -r "${REALM}" \
+  kcadm create "users/${CHECKIN_USER_ID}/vc/credentials" -r "${REALM}" \
     -s "credentialScopeName=${scope}"
 done
 
