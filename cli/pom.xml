@@ -15,6 +15,11 @@
 
 <dependencies>
         <dependency>
+            <groupId>io.nessus.oid4vc</groupId>
+            <artifactId>oid4vc-dcql</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>info.picocli</groupId>
             <artifactId>picocli</artifactId>
         </dependency>

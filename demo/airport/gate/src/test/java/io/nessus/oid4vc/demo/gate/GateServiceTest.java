@@ -77,9 +77,15 @@ class GateServiceTest {
 
         var credentials = body.at("/dcql_query/credentials");
         assertTrue(credentials.isArray());
-        assertEquals(2, credentials.size());
-        assertEquals("boarding_pass", credentials.get(0).get("id").asText());
-        assertEquals("natural_person", credentials.get(1).get("id").asText());
+        assertEquals(4, credentials.size());
+        assertEquals("boarding_pass_jwt", credentials.get(0).get("id").asText());
+        assertEquals("boarding_pass_sd", credentials.get(1).get("id").asText());
+        assertEquals("natural_person_jwt", credentials.get(2).get("id").asText());
+        assertEquals("natural_person_sd", credentials.get(3).get("id").asText());
+
+        var credentialSets = body.at("/dcql_query/credential_sets");
+        assertTrue(credentialSets.isArray());
+        assertEquals(2, credentialSets.size());
     }
 
     @Test
@@ -108,8 +114,8 @@ class GateServiceTest {
         ));
 
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("boarding_pass", buildVpJwt(boardingPassVcJwt));
-        vpToken.put("natural_person", buildVpJwt(personVcJwt));
+        vpToken.put("boarding_pass_jwt", buildVpJwt(boardingPassVcJwt));
+        vpToken.put("natural_person_jwt", buildVpJwt(personVcJwt));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
@@ -142,7 +148,7 @@ class GateServiceTest {
         ));
 
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("natural_person", buildVpJwt(personVcJwt));
+        vpToken.put("natural_person_jwt", buildVpJwt(personVcJwt));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);

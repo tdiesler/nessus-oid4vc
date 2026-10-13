@@ -3,13 +3,14 @@ package io.nessus.oid4vc.demo.checkin;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jwt.SignedJWT;
-import io.nessus.oid4vc.verifier.DcqlEvaluator;
-import io.nessus.oid4vc.verifier.DcqlQuery;
-import io.nessus.oid4vc.verifier.JacksonSupport;
-import io.nessus.oid4vc.verifier.VcJwtVerifier;
-import io.nessus.oid4vc.verifier.VcVerificationException;
-import io.nessus.oid4vc.verifier.VpJwtVerifier;
-import io.nessus.oid4vc.model.VpToken;
+import io.nessus.oid4vc.dcql.DcqlEvaluator;
+import io.nessus.oid4vc.dcql.DcqlQuery;
+import io.nessus.oid4vc.dcql.JacksonSupport;
+import io.nessus.oid4vc.dcql.SdJwtParser;
+import io.nessus.oid4vc.dcql.VcJwtVerifier;
+import io.nessus.oid4vc.dcql.VcVerificationException;
+import io.nessus.oid4vc.dcql.VpJwtVerifier;
+import io.nessus.oid4vc.dcql.VpToken;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
@@ -23,7 +24,7 @@ public class CheckinRoutes extends RouteBuilder {
             {
               "credentials": [
                 {
-                  "id": "airline_ticket",
+                  "id": "airline_ticket_jwt",
                   "format": "jwt_vc_json",
                   "claims": [
                     {"path": ["vc", "credentialSubject", "flightNumber"]},
@@ -32,13 +33,34 @@ public class CheckinRoutes extends RouteBuilder {
                   ]
                 },
                 {
-                  "id": "natural_person",
+                  "id": "airline_ticket_sd",
+                  "format": "dc+sd-jwt",
+                  "claims": [
+                    {"path": ["flightNumber"]},
+                    {"path": ["passengerName"]},
+                    {"path": ["departureDateTime"]}
+                  ]
+                },
+                {
+                  "id": "natural_person_jwt",
                   "format": "jwt_vc_json",
                   "claims": [
                     {"path": ["vc", "credentialSubject", "firstName"]},
                     {"path": ["vc", "credentialSubject", "familyName"]}
                   ]
+                },
+                {
+                  "id": "natural_person_sd",
+                  "format": "dc+sd-jwt",
+                  "claims": [
+                    {"path": ["firstName"]},
+                    {"path": ["familyName"]}
+                  ]
                 }
+              ],
+              "credential_sets": [
+                {"options": [["airline_ticket_jwt"], ["airline_ticket_sd"]]},
+                {"options": [["natural_person_jwt"], ["natural_person_sd"]]}
               ]
             }
             """;
@@ -142,9 +164,17 @@ public class CheckinRoutes extends RouteBuilder {
             try {
                 var vpSignedJwt = SignedJWT.parse(vpJwtStr);
                 var vcJwtStr = vpJwtVerifier.verifyAndExtract(vpSignedJwt);
-                var vcSignedJwt = SignedJWT.parse(vcJwtStr);
-                jwtVerifier.verify(vcSignedJwt);
-                var claims = JSON.readTree(vcSignedJwt.getPayload().toString());
+                JsonNode claims;
+                if (SdJwtParser.isSdJwt(vcJwtStr)) {
+                    var sdJwt = SdJwtParser.parse(vcJwtStr);
+                    var issuerJwt = SignedJWT.parse(sdJwt.issuerJwt());
+                    jwtVerifier.verify(issuerJwt);
+                    claims = SdJwtParser.discloseClaims(vcJwtStr);
+                } else {
+                    var vcSignedJwt = SignedJWT.parse(vcJwtStr);
+                    jwtVerifier.verify(vcSignedJwt);
+                    claims = JSON.readTree(vcSignedJwt.getPayload().toString());
+                }
                 vpTokenBuilder.addCredential(credId, claims);
             } catch (VcVerificationException ex) {
                 exchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
@@ -168,14 +198,25 @@ public class CheckinRoutes extends RouteBuilder {
             return;
         }
 
-        var ticketClaims = vpToken.getCredentials("airline_ticket").getFirst();
-        var ticket = ticketClaims.at("/vc/credentialSubject");
-        var personClaims = vpToken.getCredentials("natural_person").getFirst();
+        var ticketCreds = vpToken.getCredentials("airline_ticket_jwt");
+        boolean ticketSd = ticketCreds.isEmpty();
+        if (ticketSd) ticketCreds = vpToken.getCredentials("airline_ticket_sd");
+        var ticketClaims = ticketCreds.getFirst();
+        var ticket = ticketSd ? ticketClaims : ticketClaims.at("/vc/credentialSubject");
+
+        var personCreds = vpToken.getCredentials("natural_person_jwt");
+        boolean personSd = personCreds.isEmpty();
+        if (personSd) personCreds = vpToken.getCredentials("natural_person_sd");
+        var personClaims = personCreds.getFirst();
 
         var boardingRef = "BP" + UUID.randomUUID().toString().substring(0, 4).toUpperCase();
 
-        var firstName = personClaims.at("/vc/credentialSubject/firstName").asText("");
-        var familyName = personClaims.at("/vc/credentialSubject/familyName").asText("");
+        var firstName = personSd
+                ? personClaims.path("firstName").asText("")
+                : personClaims.at("/vc/credentialSubject/firstName").asText("");
+        var familyName = personSd
+                ? personClaims.path("familyName").asText("")
+                : personClaims.at("/vc/credentialSubject/familyName").asText("");
         var passengerName = firstName + " " + familyName;
 
         var boardingPass = new BoardingPass(

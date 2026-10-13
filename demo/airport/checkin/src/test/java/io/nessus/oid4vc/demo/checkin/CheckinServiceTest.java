@@ -81,9 +81,15 @@ class CheckinServiceTest {
 
         var credentials = body.at("/dcql_query/credentials");
         assertTrue(credentials.isArray());
-        assertEquals(2, credentials.size());
-        assertEquals("airline_ticket", credentials.get(0).get("id").asText());
-        assertEquals("natural_person", credentials.get(1).get("id").asText());
+        assertEquals(4, credentials.size());
+        assertEquals("airline_ticket_jwt", credentials.get(0).get("id").asText());
+        assertEquals("airline_ticket_sd", credentials.get(1).get("id").asText());
+        assertEquals("natural_person_jwt", credentials.get(2).get("id").asText());
+        assertEquals("natural_person_sd", credentials.get(3).get("id").asText());
+
+        var credentialSets = body.at("/dcql_query/credential_sets");
+        assertTrue(credentialSets.isArray());
+        assertEquals(2, credentialSets.size());
     }
 
     @Test
@@ -111,8 +117,8 @@ class CheckinServiceTest {
         ));
 
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("airline_ticket", buildVpJwt(ticketVcJwt));
-        vpToken.put("natural_person", buildVpJwt(personVcJwt));
+        vpToken.put("airline_ticket_jwt", buildVpJwt(ticketVcJwt));
+        vpToken.put("natural_person_jwt", buildVpJwt(personVcJwt));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);
@@ -150,7 +156,7 @@ class CheckinServiceTest {
         ));
 
         var vpToken = new LinkedHashMap<String, Object>();
-        vpToken.put("natural_person", buildVpJwt(personVcJwt));
+        vpToken.put("natural_person_jwt", buildVpJwt(personVcJwt));
 
         var requestBody = new LinkedHashMap<String, Object>();
         requestBody.put("vp_token", vpToken);

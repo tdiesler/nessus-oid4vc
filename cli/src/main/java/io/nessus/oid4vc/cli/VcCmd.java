@@ -7,6 +7,7 @@ import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jose.crypto.ECDSASigner;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import io.nessus.oid4vc.dcql.SdJwtParser;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -15,10 +16,13 @@ import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.Callable;
 
 import static io.nessus.oid4vc.cli.RootCmd.*;
@@ -222,7 +226,11 @@ class VcCmd implements Runnable {
 
                 var vpToken = new LinkedHashMap<String, String>();
                 for (var entry : matchedVcs.entrySet()) {
-                    var vpJwt = buildVpJwt(entry.getValue(), holderKey, verifierUrl, nonce);
+                    var credStr = entry.getValue();
+                    if (SdJwtParser.isSdJwt(credStr)) {
+                        credStr = filterDisclosures(credStr, dcqlQuery, entry.getKey());
+                    }
+                    var vpJwt = buildVpJwt(credStr, holderKey, verifierUrl, nonce);
                     vpToken.put(entry.getKey(), vpJwt);
                 }
 
@@ -255,26 +263,91 @@ class VcCmd implements Runnable {
 
             for (var credQuery : credentials) {
                 var queryId = credQuery.get("id").asText();
-                var typePrefix = snakeToCamel(queryId);
+                var format = credQuery.path("format").asText("");
+                var typePrefix = snakeToCamel(stripFormatSuffix(queryId, format));
+                if (matched.containsKey(queryId)) continue;
+
                 for (var entry : walletCredentials.entrySet()) {
                     try {
-                        var jwt = SignedJWT.parse(entry.getValue());
-                        var vcNode = MAPPER.readTree(jwt.getPayload().toString()).get("vc");
-                        if (vcNode == null) continue;
-                        var types = vcNode.get("type");
-                        if (types == null || !types.isArray()) continue;
-                        for (var t : types) {
-                            var typeStr = t.asText();
-                            if (typeStr.startsWith(typePrefix) || typeStr.equals("oid4vc_" + queryId)) {
-                                matched.put(queryId, entry.getValue());
+                        var credStr = entry.getValue();
+                        boolean isSdJwt = SdJwtParser.isSdJwt(credStr);
+
+                        var baseId = stripFormatSuffix(queryId, format);
+                        if ("dc+sd-jwt".equals(format) && isSdJwt) {
+                            var disclosed = SdJwtParser.discloseClaims(credStr);
+                            var vct = disclosed.path("vct").asText("");
+                            if (vct.startsWith(typePrefix) || vct.equals("oid4vc_" + baseId)) {
+                                matched.put(queryId, credStr);
                                 break;
                             }
+                        } else if ("jwt_vc_json".equals(format) && !isSdJwt) {
+                            var jwt = SignedJWT.parse(credStr);
+                            var vcNode = MAPPER.readTree(jwt.getPayload().toString()).get("vc");
+                            if (vcNode == null) continue;
+                            var types = vcNode.get("type");
+                            if (types == null || !types.isArray()) continue;
+                            for (var t : types) {
+                                var typeStr = t.asText();
+                                if (typeStr.startsWith(typePrefix) || typeStr.equals("oid4vc_" + baseId)) {
+                                    matched.put(queryId, credStr);
+                                    break;
+                                }
+                            }
+                            if (matched.containsKey(queryId)) break;
                         }
-                        if (matched.containsKey(queryId)) break;
                     } catch (Exception ignored) {}
                 }
             }
             return matched;
+        }
+
+        private String filterDisclosures(String sdJwtStr, JsonNode dcqlQuery, String queryId) {
+            var credentials = dcqlQuery.get("credentials");
+            Set<String> requestedClaims = Set.of();
+            for (var credQuery : credentials) {
+                if (queryId.equals(credQuery.get("id").asText())) {
+                    var claims = credQuery.get("claims");
+                    if (claims != null && claims.isArray()) {
+                        requestedClaims = new HashSet<>();
+                        for (var claim : claims) {
+                            var path = claim.get("path");
+                            if (path != null && path.isArray() && !path.isEmpty()) {
+                                requestedClaims.add(path.get(path.size() - 1).asText());
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+            if (requestedClaims.isEmpty()) return sdJwtStr;
+
+            var sdJwt = SdJwtParser.parse(sdJwtStr);
+            var filtered = new ArrayList<String>();
+            for (var disc : sdJwt.disclosures()) {
+                if (requestedClaims.contains(disc.claimName())) {
+                    filtered.add(disc.encoded());
+                }
+            }
+
+            var sb = new StringBuilder(sdJwt.issuerJwt());
+            for (var enc : filtered) {
+                sb.append("~").append(enc);
+            }
+            sb.append("~");
+            if (sdJwt.keyBindingJwt() != null) {
+                sb.append(sdJwt.keyBindingJwt());
+            }
+            return sb.toString();
+        }
+
+        private String stripFormatSuffix(String queryId, String format) {
+            if ("jwt_vc_json".equals(format) && queryId.endsWith("_jwt")) {
+                return queryId.substring(0, queryId.length() - 4);
+            }
+            if ("dc+sd-jwt".equals(format) && queryId.endsWith("_sd")) {
+                return queryId.substring(0, queryId.length() - 3);
+            }
+            return queryId;
         }
 
         private String snakeToCamel(String snake) {

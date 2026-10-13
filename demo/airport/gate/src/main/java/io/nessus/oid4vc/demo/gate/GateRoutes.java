@@ -1,14 +1,16 @@
 package io.nessus.oid4vc.demo.gate;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.nimbusds.jwt.SignedJWT;
-import io.nessus.oid4vc.verifier.DcqlEvaluator;
-import io.nessus.oid4vc.verifier.DcqlQuery;
-import io.nessus.oid4vc.verifier.JacksonSupport;
-import io.nessus.oid4vc.verifier.VcJwtVerifier;
-import io.nessus.oid4vc.verifier.VcVerificationException;
-import io.nessus.oid4vc.verifier.VpJwtVerifier;
-import io.nessus.oid4vc.model.VpToken;
+import io.nessus.oid4vc.dcql.DcqlEvaluator;
+import io.nessus.oid4vc.dcql.DcqlQuery;
+import io.nessus.oid4vc.dcql.JacksonSupport;
+import io.nessus.oid4vc.dcql.SdJwtParser;
+import io.nessus.oid4vc.dcql.VcJwtVerifier;
+import io.nessus.oid4vc.dcql.VcVerificationException;
+import io.nessus.oid4vc.dcql.VpJwtVerifier;
+import io.nessus.oid4vc.dcql.VpToken;
 import org.apache.camel.Exchange;
 import org.apache.camel.builder.RouteBuilder;
 
@@ -21,7 +23,7 @@ public class GateRoutes extends RouteBuilder {
             {
               "credentials": [
                 {
-                  "id": "boarding_pass",
+                  "id": "boarding_pass_jwt",
                   "format": "jwt_vc_json",
                   "claims": [
                     {"path": ["vc", "credentialSubject", "passengerName"]},
@@ -33,13 +35,37 @@ public class GateRoutes extends RouteBuilder {
                   ]
                 },
                 {
-                  "id": "natural_person",
+                  "id": "boarding_pass_sd",
+                  "format": "dc+sd-jwt",
+                  "claims": [
+                    {"path": ["passengerName"]},
+                    {"path": ["flightNumber"]},
+                    {"path": ["seat"]},
+                    {"path": ["boardingGroup"]},
+                    {"path": ["departureDateTime"]},
+                    {"path": ["gate"]}
+                  ]
+                },
+                {
+                  "id": "natural_person_jwt",
                   "format": "jwt_vc_json",
                   "claims": [
                     {"path": ["vc", "credentialSubject", "firstName"]},
                     {"path": ["vc", "credentialSubject", "familyName"]}
                   ]
+                },
+                {
+                  "id": "natural_person_sd",
+                  "format": "dc+sd-jwt",
+                  "claims": [
+                    {"path": ["firstName"]},
+                    {"path": ["familyName"]}
+                  ]
                 }
+              ],
+              "credential_sets": [
+                {"options": [["boarding_pass_jwt"], ["boarding_pass_sd"]]},
+                {"options": [["natural_person_jwt"], ["natural_person_sd"]]}
               ]
             }
             """;
@@ -103,9 +129,17 @@ public class GateRoutes extends RouteBuilder {
             try {
                 var vpSignedJwt = SignedJWT.parse(vpJwtStr);
                 var vcJwtStr = vpJwtVerifier.verifyAndExtract(vpSignedJwt);
-                var vcSignedJwt = SignedJWT.parse(vcJwtStr);
-                jwtVerifier.verify(vcSignedJwt);
-                var claims = JSON.readTree(vcSignedJwt.getPayload().toString());
+                JsonNode claims;
+                if (SdJwtParser.isSdJwt(vcJwtStr)) {
+                    var sdJwt = SdJwtParser.parse(vcJwtStr);
+                    var issuerJwt = SignedJWT.parse(sdJwt.issuerJwt());
+                    jwtVerifier.verify(issuerJwt);
+                    claims = SdJwtParser.discloseClaims(vcJwtStr);
+                } else {
+                    var vcSignedJwt = SignedJWT.parse(vcJwtStr);
+                    jwtVerifier.verify(vcSignedJwt);
+                    claims = JSON.readTree(vcSignedJwt.getPayload().toString());
+                }
                 vpTokenBuilder.addCredential(credId, claims);
             } catch (VcVerificationException ex) {
                 exchange.getIn().setHeader(Exchange.HTTP_RESPONSE_CODE, 400);
@@ -129,12 +163,22 @@ public class GateRoutes extends RouteBuilder {
             return;
         }
 
-        var boardingPassClaims = vpToken.getCredentials("boarding_pass").getFirst();
-        var bp = boardingPassClaims.at("/vc/credentialSubject");
+        var bpCreds = vpToken.getCredentials("boarding_pass_jwt");
+        boolean bpSd = bpCreds.isEmpty();
+        if (bpSd) bpCreds = vpToken.getCredentials("boarding_pass_sd");
+        var bpClaims = bpCreds.getFirst();
+        var bp = bpSd ? bpClaims : bpClaims.at("/vc/credentialSubject");
 
-        var personClaims = vpToken.getCredentials("natural_person").getFirst();
-        var firstName = personClaims.at("/vc/credentialSubject/firstName").asText("");
-        var familyName = personClaims.at("/vc/credentialSubject/familyName").asText("");
+        var personCreds = vpToken.getCredentials("natural_person_jwt");
+        boolean personSd = personCreds.isEmpty();
+        if (personSd) personCreds = vpToken.getCredentials("natural_person_sd");
+        var personClaims = personCreds.getFirst();
+        var firstName = personSd
+                ? personClaims.path("firstName").asText("")
+                : personClaims.at("/vc/credentialSubject/firstName").asText("");
+        var familyName = personSd
+                ? personClaims.path("familyName").asText("")
+                : personClaims.at("/vc/credentialSubject/familyName").asText("");
         var passengerName = firstName + " " + familyName;
 
         var response = new LinkedHashMap<String, Object>();

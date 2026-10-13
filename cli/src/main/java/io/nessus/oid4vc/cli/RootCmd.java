@@ -1,5 +1,6 @@
 ///usr/bin/env jbang "$0" "$@" ; exit $?
 
+//DEPS io.nessus.oid4vc:oid4vc-dcql:1.0.0-SNAPSHOT
 //DEPS info.picocli:picocli:4.7.6
 //DEPS com.fasterxml.jackson.core:jackson-databind:2.17.0
 //DEPS com.nimbusds:nimbus-jose-jwt:9.37.3

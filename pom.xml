@@ -13,7 +13,7 @@
     <description>OpenID for Verifiable Presentations</description>
 
     <modules>
-        <module>verifier</module>
+        <module>dcql</module>
         <module>mapper</module>
         <module>cli</module>
         <module>demo/airport/ticket</module>
