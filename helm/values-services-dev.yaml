@@ -19,9 +19,9 @@ deployments:
   # Keycloak Service
   #
   keycloak:
-    imagePrefix: "quay.io/keycloak/"
+    imagePrefix: ""
     image: "keycloak"
-    version: nightly
+    version: latest
     nodePort: 30800
     realm: oid4vci
     pullPolicy: IfNotPresent

@@ -1,6 +1,6 @@
 # Nessus OID4VC
 
-OpenID for Verifiable Presentations — DCQL verification and OID4VCI tooling.
+OpenID for Verifiable Credential and Presentation.
 
 ## Prerequisites
 
@@ -10,11 +10,20 @@ OpenID for Verifiable Presentations — DCQL verification and OID4VCI tooling.
 
 ## CLI Usage
 
-### Login
-
-```bash
-KC_ADMIN_PASSWORD="$(kubectl --context=rancher-desktop get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d)"
-bin/oid4vc login --server http://localhost:30800 --password "${KC_ADMIN_PASSWORD}"
+```
+Usage: oid4vc [-hvV] [COMMAND]
+  -h, --help      Show this help message and exit.
+  -v, --verbose   Show request/response details
+  -V, --version   Print version information and exit.
+Commands:
+  config  Configure wallet defaults
+  demo    Demo helper commands
+  key     Manage keys
+  login   Authenticate with Keycloak
+  logout  End Keycloak session and clear stored tokens
+  offer   Manage credential offers
+  show    Show wallet and server state
+  vc      Manage verifiable credentials
 ```
 
-Session tokens are stored in `~/.config/wallet.json`
+Wallet state is in `~/.config/wallet.json`

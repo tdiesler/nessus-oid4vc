@@ -2,6 +2,10 @@ KUBE_CONTEXT := rancher-desktop
 KUBECTL := kubectl --context=$(KUBE_CONTEXT)
 MAPPER_JAR := mapper/target/oid4vc-mapper-1.0.0-SNAPSHOT.jar
 
+KEYCLOAK_DIR ?= ../keycloak
+KEYCLOAK_HOME_DIR ?= $(KEYCLOAK_DIR)/quarkus/dist/target/keycloak-999.0.0-SNAPSHOT
+KEYCLOAK_FEATURES ?= "oid4vc-vci,oid4vc-vci-preauth-code"
+
 build:
 	mvn clean package -DskipTests
 
@@ -14,18 +18,22 @@ keycloak-login:
 	@$(eval KC_ADMIN_PASSWORD := $(shell $(KUBECTL) get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d))
 	@bin/oid4vc login --server http://localhost:30800 --password "$(KC_ADMIN_PASSWORD)"
 
-keycloak-setup:
-	scripts/oid4vc-setup
-
 keycloak-mapper-update: $(MAPPER_JAR)
 	$(KUBECTL) cp $(MAPPER_JAR) busybox:/providers/
 	$(KUBECTL) rollout restart statefulset keycloak
 	$(KUBECTL) rollout status statefulset keycloak --timeout=60s
 
-HELM_SET :=
-ifdef EXTERNAL_IP
-  HELM_SET += --set deployments.keycloak.externalIP=$(EXTERNAL_IP)
-endif
+keycloak-build:
+	@cd $(KEYCLOAK_DIR) && ./mvnw -pl 'quarkus/dist,!crypto/fips1402,tests,testsuite/integration-arquillian/tests/base' -am -DskipTests clean install
+	@tar xzf $(KEYCLOAK_DIR)/quarkus/dist/target/keycloak-999.0.0-SNAPSHOT.tar.gz -C $(KEYCLOAK_DIR)/quarkus/dist/target
+
+keycloak-image: keycloak-build
+	@cd $(KEYCLOAK_DIR)/quarkus/container && cp ../dist/target/keycloak-999.0.0-SNAPSHOT.tar.gz . && \
+		docker buildx build --platform linux/amd64 --build-arg KEYCLOAK_DIST=keycloak-999.0.0-SNAPSHOT.tar.gz -t keycloak:latest .
+
+keycloak-tests:
+	@cd $(KEYCLOAK_DIR) && \
+		mvn -pl tests/base clean test -Dtest='org.keycloak.tests.oid4vc.**'
 
 upgrade: images
-	helm upgrade --kube-context=$(KUBE_CONTEXT) --install nessus-services ./helm -f ./helm/values-services-dev.yaml $(HELM_SET)
+	helm upgrade --kube-context=$(KUBE_CONTEXT) --install nessus-services ./helm -f ./helm/values-services-dev.yaml
