@@ -42,6 +42,9 @@ class OfferCmd implements Runnable {
         @Option(names = "--target-user", required = true, description = "Username the credential offer is for")
         String targetUser;
 
+        @Option(names = "--tx-code", description = "Require a transaction code for redemption")
+        Boolean txCode;
+
         @Option(names = "--type", description = "Response type (e.g. uri, uri_qr)")
         String type;
 
@@ -72,6 +75,9 @@ class OfferCmd implements Runnable {
                 if (preAuthorized != null) {
                     url += "&pre_authorized=" + preAuthorized;
                 }
+                if (Boolean.TRUE.equals(txCode)) {
+                    url += "&tx_code=true";
+                }
                 if (type != null) {
                     url += "&type=" + URLEncoder.encode(type, StandardCharsets.UTF_8);
                 }
@@ -85,15 +91,17 @@ class OfferCmd implements Runnable {
                 var json = MAPPER.readTree(response.body());
                 var offerUri = json.get("issuer").asText() + "/" + json.get("nonce").asText();
 
-                // Store offer URI and QR code in wallet and switch default user
+                // Store offer URI in wallet and switch default user
                 var storeUser = storeFor != null ? storeFor : targetUser;
                 var storeConn = resolveWalletEntry(wallet, realmName, storeUser);
-                if (storeConn.offers == null) storeConn.offers = new LinkedHashMap<>();
-                var offerData = new LinkedHashMap<String, Object>();
-                offerData.put("offerUri", offerUri);
+                if (storeConn.offerUris == null) storeConn.offerUris = new LinkedHashMap<>();
+                var uriData = new LinkedHashMap<String, Object>();
+                uriData.put("offerUri", offerUri);
                 var qrNode = json.get("qr_code");
-                if (qrNode != null) offerData.put("qrCode", qrNode.asText());
-                storeConn.offers.put(credConfigId, offerData);
+                if (qrNode != null) uriData.put("qrCode", qrNode.asText());
+                var txCodeNode = json.get("tx_code");
+                if (txCodeNode != null) uriData.put("txCode", txCodeNode.asText());
+                storeConn.offerUris.put(credConfigId, uriData);
                 wallet.realms.get(realmName).defaultUser = storeUser;
                 saveWallet(wallet);
 
@@ -101,6 +109,7 @@ class OfferCmd implements Runnable {
                 var displayJson = MAPPER.createObjectNode();
                 displayJson.put("issuer", json.get("issuer").asText());
                 displayJson.put("nonce", json.get("nonce").asText());
+                if (txCodeNode != null) displayJson.put("tx_code", txCodeNode.asText());
                 if (qrNode != null) {
                     var qrValue = qrNode.asText();
                     var prefix = qrValue.substring(0, Math.min(34, qrValue.length()));
@@ -117,11 +126,11 @@ class OfferCmd implements Runnable {
         }
     }
 
-    static String resolveOfferKey(String input, Map<String, Map<String, Object>> offers) {
-        if (offers == null || offers.isEmpty()) return input;
+    static String resolveOfferKey(String input, Map<String, ?> map) {
+        if (map == null || map.isEmpty()) return input;
         try {
             int idx = Integer.parseInt(input);
-            var keys = offers.keySet().toArray(new String[0]);
+            var keys = map.keySet().toArray(new String[0]);
             if (idx >= 1 && idx <= keys.length) return keys[idx - 1];
         } catch (NumberFormatException ignored) {}
         return input;
@@ -146,18 +155,19 @@ class OfferCmd implements Runnable {
             var conn = resolveConnection(wallet, realmName, user);
 
             try {
-                var resolvedId = resolveOfferKey(credConfigId, conn.offers);
-                if (conn.offers == null || !conn.offers.containsKey(resolvedId)) {
+                var resolvedId = resolveOfferKey(credConfigId, conn.offerUris);
+                if (conn.offerUris == null || !conn.offerUris.containsKey(resolvedId)) {
                     System.err.println("No pending offer for '" + credConfigId + "'. Run 'oid4vc show offer' to list.");
                     return 1;
                 }
 
-                var stored = conn.offers.get(resolvedId);
-                var offerUri = (String) stored.get("offerUri");
-                if (offerUri == null) {
+                if (conn.offers != null && conn.offers.containsKey(resolvedId)) {
                     System.err.println("Offer already fetched. Run 'oid4vc show offer' or 'oid4vc offer redeem'.");
                     return 1;
                 }
+
+                var uriData = conn.offerUris.get(resolvedId);
+                var offerUri = (String) uriData.get("offerUri");
 
                 var response = httpGet(offerUri, null);
                 if (response.statusCode() != 200) {
@@ -168,6 +178,7 @@ class OfferCmd implements Runnable {
                 var offer = MAPPER.readTree(response.body());
                 @SuppressWarnings("unchecked")
                 var offerMap = (Map<String, Object>) MAPPER.convertValue(offer, Map.class);
+                if (conn.offers == null) conn.offers = new LinkedHashMap<>();
                 conn.offers.put(resolvedId, offerMap);
                 saveWallet(wallet);
 
@@ -192,6 +203,9 @@ class OfferCmd implements Runnable {
         @Option(names = "--user", description = "Wallet user (defaults to current user)")
         String user;
 
+        @Option(names = "--tx-code", description = "Transaction code for pre-authorized redemption")
+        String txCode;
+
         @Option(names = "--client", description = "OAuth client ID (defaults to stored default)")
         String clientId;
 
@@ -202,19 +216,13 @@ class OfferCmd implements Runnable {
             var conn = resolveConnection(wallet, realmName, user);
 
             try {
-                var resolvedId = resolveOfferKey(credConfigId, conn.offers);
+                var resolvedId = resolveOfferKey(credConfigId, conn.offerUris);
                 if (conn.offers == null || !conn.offers.containsKey(resolvedId)) {
-                    System.err.println("No offer for '" + credConfigId + "'. Run 'oid4vc offer get' first.");
-                    return 1;
-                }
-
-                var offerMap = conn.offers.get(resolvedId);
-                if (offerMap.containsKey("offerUri")) {
                     System.err.println("Offer not yet fetched. Run 'oid4vc offer get " + resolvedId + "' first.");
                     return 1;
                 }
 
-                var offer = MAPPER.valueToTree(offerMap);
+                var offer = MAPPER.valueToTree(conn.offers.get(resolvedId));
 
                 var oauthClientId = clientId;
                 if (oauthClientId == null) oauthClientId = conn.clientId;
@@ -226,10 +234,20 @@ class OfferCmd implements Runnable {
                 var preAuthCode = preAuthGrant.path("pre-authorized_code").asText(null);
 
                 if (preAuthCode != null) {
+                    // Check if offer requires tx_code
+                    var txCodeMeta = preAuthGrant.path("tx_code");
+                    if (!txCodeMeta.isMissingNode() && txCode == null) {
+                        System.err.println("This offer requires a transaction code. Use --tx-code <value>");
+                        return 1;
+                    }
+
                     // Pre-authorized code grant: exchange code for token
                     var tokenBody = "grant_type=" + URLEncoder.encode("urn:ietf:params:oauth:grant-type:pre-authorized_code", StandardCharsets.UTF_8)
                         + "&pre-authorized_code=" + URLEncoder.encode(preAuthCode, StandardCharsets.UTF_8)
                         + "&client_id=" + URLEncoder.encode(oauthClientId, StandardCharsets.UTF_8);
+                    if (txCode != null) {
+                        tokenBody += "&tx_code=" + URLEncoder.encode(txCode, StandardCharsets.UTF_8);
+                    }
 
                     var tokenResponse = httpPost(
                         wallet.serverUrl + "/realms/" + realmName + "/protocol/openid-connect/token",
@@ -351,6 +369,7 @@ class OfferCmd implements Runnable {
                     String vcJwt = credentials.get(0).get("credential").asText();
                     if (conn.credentials == null) conn.credentials = new LinkedHashMap<>();
                     conn.credentials.put(credId, vcJwt);
+                    if (conn.offerUris != null) conn.offerUris.remove(resolvedId);
                     conn.offers.remove(resolvedId);
                     saveWallet(wallet);
                     System.out.println(vcJwt);

@@ -142,7 +142,7 @@ class ShowCmd implements Runnable {
             var wallet = loadWallet();
             var conn = resolveConnection(wallet, realmName, user);
 
-            if (conn.offers == null || conn.offers.isEmpty()) {
+            if (conn.offerUris == null || conn.offerUris.isEmpty()) {
                 System.out.println("No offers stored.");
                 return 0;
             }
@@ -155,36 +155,29 @@ class ShowCmd implements Runnable {
 
         private Integer listOffers(WalletState.Connection conn) {
             int idx = 1;
-            for (var entry : conn.offers.entrySet()) {
-                var id = entry.getKey();
-                var offer = entry.getValue();
-                var status = offer.containsKey("offerUri") ? "pending" : "fetched";
+            for (var id : conn.offerUris.keySet()) {
+                var status = conn.offers != null && conn.offers.containsKey(id) ? "fetched" : "pending";
                 System.out.printf("  %d  %-40s  [%s]%n", idx++, id, status);
             }
             return 0;
         }
 
         private Integer showOffer(WalletState.Connection conn) {
-            var resolvedKey = credConfigId;
-            try {
-                int idx = Integer.parseInt(credConfigId);
-                var keys = conn.offers.keySet().toArray(new String[0]);
-                if (idx < 1 || idx > keys.length) {
-                    System.err.println("Index " + idx + " out of range (1-" + keys.length + ").");
-                    return 1;
-                }
-                resolvedKey = keys[idx - 1];
-            } catch (NumberFormatException ignored) {}
+            var resolvedKey = OfferCmd.resolveOfferKey(credConfigId, conn.offerUris);
 
-            if (!conn.offers.containsKey(resolvedKey)) {
+            if (conn.offerUris == null || !conn.offerUris.containsKey(resolvedKey)) {
                 System.err.println("No offer '" + resolvedKey + "'. Run 'oid4vc show offer' to list.");
                 return 1;
             }
 
             try {
-                var offer = conn.offers.get(resolvedKey);
-                System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(offer));
-                var qrCode = offer.get("qrCode");
+                var combined = new java.util.LinkedHashMap<String, Object>();
+                combined.put("offerUri", conn.offerUris.get(resolvedKey));
+                if (conn.offers != null && conn.offers.containsKey(resolvedKey)) {
+                    combined.put("offer", conn.offers.get(resolvedKey));
+                }
+                System.out.println(MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(combined));
+                var qrCode = conn.offerUris.get(resolvedKey).get("qrCode");
                 if (qrCode != null) openQrCode(qrCode.toString());
                 return 0;
             } catch (Exception ex) {

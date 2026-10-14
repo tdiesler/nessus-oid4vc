@@ -222,10 +222,10 @@ class LoginCmd implements Callable<Integer> {
             if (resolvedUser == null) return null;
             var conn = resolveConnection(wallet, tokenRealm, resolvedUser);
             if (conn.offers == null) return null;
-            var offer = conn.offers.get(scope);
-            if (offer == null) return null;
+            var offerMap = conn.offers.get(scope);
+            if (offerMap == null) return null;
             @SuppressWarnings("unchecked")
-            var grants = (Map<String, Object>) offer.get("grants");
+            var grants = (Map<String, Object>) offerMap.get("grants");
             if (grants == null) return null;
             @SuppressWarnings("unchecked")
             var authCodeGrant = (Map<String, Object>) grants.get("authorization_code");

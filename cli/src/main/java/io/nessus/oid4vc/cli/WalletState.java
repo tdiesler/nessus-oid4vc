@@ -19,6 +19,7 @@ class WalletState {
         public String clientId;
         public String defaultKey;
         public List<Map<String, Object>> keys;
+        public Map<String, Map<String, Object>> offerUris;
         public Map<String, Map<String, Object>> offers;
         public Map<String, String> credentials;
         public String accessToken;
