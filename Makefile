@@ -1,7 +1,5 @@
 KUBE_CONTEXT := rancher-desktop
 KUBECTL := kubectl --context=$(KUBE_CONTEXT)
-MAPPER_JAR := mapper/target/oid4vc-mapper-1.0.0-SNAPSHOT.jar
-
 KEYCLOAK_DIR ?= ../keycloak
 KEYCLOAK_HOME_DIR ?= $(KEYCLOAK_DIR)/quarkus/dist/target/keycloak-999.0.0-SNAPSHOT
 KEYCLOAK_FEATURES ?= "oid4vc-vci,oid4vc-vci-preauth-code"
@@ -21,11 +19,6 @@ keycloak-build:
 keycloak-login:
 	@$(eval KC_ADMIN_PASSWORD := $(shell $(KUBECTL) get secret keycloak-secret -o jsonpath='{.data.ADMIN_PASSWORD}' | base64 -d))
 	@bin/oid4vc login --server http://localhost:30800 --password "$(KC_ADMIN_PASSWORD)"
-
-keycloak-mapper-update: $(MAPPER_JAR)
-	$(KUBECTL) cp $(MAPPER_JAR) busybox:/providers/
-	$(KUBECTL) rollout restart statefulset keycloak
-	$(KUBECTL) rollout status statefulset keycloak --timeout=60s
 
 keycloak-image: keycloak-build
 	@cd $(KEYCLOAK_DIR)/quarkus/container && cp ../dist/target/keycloak-999.0.0-SNAPSHOT.tar.gz . && \

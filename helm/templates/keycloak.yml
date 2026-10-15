@@ -65,8 +65,6 @@ spec:
               value: "false"
             {{- end }}
           volumeMounts:
-            - name: providers
-              mountPath: /opt/keycloak/providers
             - name: signing-keystore
               mountPath: /opt/keycloak/data/{{ .realm }}/es256-vc-signing.p12
               subPath: es256-vc-signing.p12
@@ -90,26 +88,9 @@ spec:
             failureThreshold: 30        # allow failures (→ 5m grace period)
             timeoutSeconds: 5           # each probe times out after 5s
       volumes:
-        - name: providers
-          persistentVolumeClaim:
-            claimName: keycloak-providers
         - name: signing-keystore
           secret:
             secretName: signing-keystore
----
-
-# Keycloak Providers PVC
-#
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: keycloak-providers
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 64Mi
 ---
 
 # Keycloak Service

@@ -59,10 +59,10 @@ class OfferCmdTest extends AbstractCmdTest {
 
         // Verify offer URI stored in alice's wallet
         var wallet = MAPPER.readTree(walletFile.toFile());
-        var offers = wallet.at("/realms/" + DEFAULT_REALM + "/users/alice/offers");
-        assertFalse(offers.isMissingNode(), "Offers must be in wallet");
-        assertTrue(offers.has(credConfigId), "Offer for " + credConfigId + " must be in wallet");
-        assertTrue(offers.get(credConfigId).has("offerUri"), "Stored offer must have offerUri");
+        var offerUris = wallet.at("/realms/" + DEFAULT_REALM + "/users/alice/offerUris");
+        assertFalse(offerUris.isMissingNode(), "Offer URIs must be in wallet");
+        assertTrue(offerUris.has(credConfigId), "Offer for " + credConfigId + " must be in wallet");
+        assertTrue(offerUris.get(credConfigId).has("offerUri"), "Stored offer must have offerUri");
 
         // Show offers list — should show [pending]
         var showList = cli("show", "offer", "--user", "alice");
@@ -82,7 +82,7 @@ class OfferCmdTest extends AbstractCmdTest {
 
         // Verify offer is now fetched (has credential_configuration_ids, no offerUri)
         wallet = MAPPER.readTree(walletFile.toFile());
-        offers = wallet.at("/realms/" + DEFAULT_REALM + "/users/alice/offers");
+        var offers = wallet.at("/realms/" + DEFAULT_REALM + "/users/alice/offers");
         var fetchedOffer = offers.get(credConfigId);
         assertFalse(fetchedOffer.has("offerUri"), "Fetched offer must not have offerUri");
         assertTrue(fetchedOffer.has("credential_configuration_ids"), "Fetched offer must have credential_configuration_ids");
