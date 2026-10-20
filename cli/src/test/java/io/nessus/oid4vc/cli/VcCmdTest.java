@@ -5,9 +5,12 @@ import com.nimbusds.jose.crypto.ECDSAVerifier;
 import com.nimbusds.jose.jwk.ECKey;
 import com.nimbusds.jose.jwk.JWKSet;
 import com.nimbusds.jwt.SignedJWT;
+import io.nessus.oid4vc.dcql.SdJwtParser;
 import org.junit.jupiter.api.Test;
 
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 
@@ -18,6 +21,72 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 class VcCmdTest extends AbstractCmdTest {
 
     static final ObjectMapper MAPPER = new ObjectMapper();
+
+    // filterDisclosures — regression coverage for a bug where a nested DCQL claim path (e.g.
+    // ["airline-ticket", "flightNumber"], addressing a field inside an object the GraphQL mapper discloses
+    // as a single atomic claim) was matched against the disclosure's name using the LAST path segment
+    // ("flightNumber") instead of the FIRST ("airline-ticket"), silently dropping the whole disclosure from
+    // the presentation sent to the verifier.
+
+    @Test
+    void filterDisclosuresKeepsDisclosureAddressedByNestedPath() throws Exception {
+        var sdJwtStr = fakeSdJwt(
+                disclosure("salt1", "airline-ticket", Map.of("flightNumber", "BA123")),
+                disclosure("salt2", "unrelatedClaim", "should be dropped"));
+
+        var dcqlQuery = MAPPER.readTree("""
+                {"credentials":[{"id":"airline_ticket_sd","claims":[
+                    {"path":["airline-ticket","flightNumber"]},
+                    {"path":["airline-ticket","passengerName"]}
+                ]}]}""");
+
+        var present = new VcCmd.Present();
+        var filtered = present.filterDisclosures(sdJwtStr, dcqlQuery, "airline_ticket_sd");
+
+        var parts = SdJwtParser.parse(filtered);
+        var names = parts.disclosures().stream().map(SdJwtParser.Disclosure::claimName).toList();
+        assertEquals(List.of("airline-ticket"), names, "must keep the 'airline-ticket' disclosure by its "
+                + "first path segment and drop the unrequested one");
+    }
+
+    @Test
+    void filterDisclosuresKeepsFlatClaimUnaffected() throws Exception {
+        // Single-segment paths are unaffected by the first-vs-last-segment distinction (first == last);
+        // this guards against a fix that accidentally breaks the pre-existing flat-claim case.
+        var sdJwtStr = fakeSdJwt(
+                disclosure("salt1", "firstName", "Alice"),
+                disclosure("salt2", "familyName", "Wonderland"));
+
+        var dcqlQuery = MAPPER.readTree("""
+                {"credentials":[{"id":"natural_person_sd","claims":[
+                    {"path":["firstName"]}
+                ]}]}""");
+
+        var present = new VcCmd.Present();
+        var filtered = present.filterDisclosures(sdJwtStr, dcqlQuery, "natural_person_sd");
+
+        var parts = SdJwtParser.parse(filtered);
+        var names = parts.disclosures().stream().map(SdJwtParser.Disclosure::claimName).toList();
+        assertEquals(List.of("firstName"), names);
+    }
+
+    private static String fakeSdJwt(String... disclosures) {
+        var sb = new StringBuilder("fake.issuer.jwt");
+        for (var d : disclosures) {
+            sb.append("~").append(d);
+        }
+        sb.append("~");
+        return sb.toString();
+    }
+
+    private static String disclosure(String salt, String claimName, Object value) throws Exception {
+        var array = MAPPER.createArrayNode();
+        array.add(salt);
+        array.add(claimName);
+        array.addPOJO(value);
+        var json = MAPPER.writeValueAsString(array);
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(json.getBytes(StandardCharsets.UTF_8));
+    }
 
     @Test
     void vcHelp() throws Exception {

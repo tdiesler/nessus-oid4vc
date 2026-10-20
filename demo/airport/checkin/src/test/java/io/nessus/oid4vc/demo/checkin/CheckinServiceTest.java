@@ -96,6 +96,8 @@ class CheckinServiceTest {
     void checkinResponseApproved() throws Exception {
         var ticketVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_airline_ticket"),
+                // The GraphQL claim mapper spreads the booking object's fields into individual top-level
+                // claims (not nested under claim.name; see keycloak/keycloak#53956).
                 "credentialSubject", Map.of(
                         "ticketRef", "A3F2",
                         "flightNumber", "BA123",

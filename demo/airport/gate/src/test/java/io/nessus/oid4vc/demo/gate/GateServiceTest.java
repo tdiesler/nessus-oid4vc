@@ -92,6 +92,8 @@ class GateServiceTest {
     void gateResponseBoarded() throws Exception {
         var boardingPassVcJwt = buildVcJwt(Map.of(
                 "type", List.of("VerifiableCredential", "oid4vc_boarding_pass"),
+                // The GraphQL claim mapper spreads the boarding pass object's fields into individual
+                // top-level claims (not nested under claim.name; see keycloak/keycloak#53956).
                 "credentialSubject", Map.of(
                         "passengerName", "Alice Wonderland",
                         "flightNumber", "BA123",

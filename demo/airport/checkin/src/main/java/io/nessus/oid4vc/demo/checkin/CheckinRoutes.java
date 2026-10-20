@@ -202,6 +202,8 @@ public class CheckinRoutes extends RouteBuilder {
         boolean ticketSd = ticketCreds.isEmpty();
         if (ticketSd) ticketCreds = vpToken.getCredentials("airline_ticket_sd");
         var ticketClaims = ticketCreds.getFirst();
+        // The GraphQL claim mapper spreads the booking object's fields into individual top-level claims
+        // (not nested under claim.name; see keycloak/keycloak#53956), directly under credentialSubject.
         var ticket = ticketSd ? ticketClaims : ticketClaims.at("/vc/credentialSubject");
 
         var personCreds = vpToken.getCredentials("natural_person_jwt");

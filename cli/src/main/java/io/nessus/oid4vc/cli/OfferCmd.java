@@ -33,6 +33,9 @@ class OfferCmd implements Runnable {
     @Command(name = "create", description = "Create a credential offer")
     static class Create implements Callable<Integer> {
 
+        @Option(names = "--claims-ref", description = "Opaque reference to external claim data for this offer")
+        String claimsRef;
+
         @Option(names = "--credential-configuration", required = true, description = "Credential configuration (e.g. oid4vc_airline_ticket_jwt)")
         String credConfigId;
 
@@ -80,6 +83,9 @@ class OfferCmd implements Runnable {
                 }
                 if (type != null) {
                     url += "&type=" + URLEncoder.encode(type, StandardCharsets.UTF_8);
+                }
+                if (claimsRef != null) {
+                    url += "&claims_ref=" + URLEncoder.encode(claimsRef, StandardCharsets.UTF_8);
                 }
 
                 var response = httpGet(url, conn.accessToken);

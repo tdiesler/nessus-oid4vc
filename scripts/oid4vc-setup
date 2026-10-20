@@ -109,7 +109,7 @@ create_vc_scope() {
           \"claim.name\": \"${mapper_name}\",
           \"graphqlEndpoint\": \"${graphql_endpoint}\",
           \"graphqlQuery\": \"${graphql_query}\",
-          \"graphqlVariableMapping\": \"id=claimsRef\",
+          \"graphqlVariableMapping\": \"id=offer:claimsRef\",
           \"responsePath\": \"${response_path}\"
         }
       }
@@ -152,19 +152,12 @@ RESULT=$(kcadm create clients -o -r "${REALM}" \
   -s attributes='{"oid4vci.enabled":"true"}')
 if ${VERBOSE}; then echo "${RESULT}"; fi
 
-# Update user profile to add claimsRef attribute
 # Make firstName/lastName optional
 #
 echo "Update user profile ..."
 PROFILE=$(kcadm get users/profile -r "${REALM}" 2>/dev/null)
 PROFILE=$(echo "${PROFILE}" | jq '
   (.attributes[] | select(.name == "firstName" or .name == "lastName")) |= del(.required)
-  | .attributes += [{
-      "name": "claimsRef",
-      "displayName": "Claims Reference",
-      "permissions": {"view": ["admin"], "edit": ["admin"]},
-      "multivalued": false
-    }]
 ')
 echo "${PROFILE}" | kcadm update users/profile -r "${REALM}" -f -
 

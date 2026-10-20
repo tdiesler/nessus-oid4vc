@@ -29,6 +29,7 @@ keycloak-setup:
 
 keycloak-tests:
 	@cd $(KEYCLOAK_DIR) && \
+		mvn -pl services clean test -Dtest='org.keycloak.protocol.oid4vc.**' && \
 		mvn -pl tests/base clean test -Dtest='org.keycloak.tests.oid4vc.**'
 
 upgrade: images

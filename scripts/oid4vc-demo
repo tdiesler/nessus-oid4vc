@@ -24,7 +24,7 @@ if [[ "${1:-}" == "--restart" ]]; then
 fi
 
 REALM="${1:-oid4vci}"
-VC_FMT="sd"
+VC_FMT="jwt"
 next="1"
 
 # Menu Actions ---------------------------------------------------------------------------------------------------------
@@ -48,16 +48,6 @@ do_booking() {
   open "http://${EXTERNAL_IP}:30100/bookings.html"
 
   echo
-  echo "  ###########################################################################"
-  echo "  # HACK: Set airline.claimsRef user attribute to '${claims_ref}' so the GraphQL"
-  echo "  # claim mapper can resolve booking data (graphqlVariableMapping: id=claimsRef)."
-  echo "  ###########################################################################"
-  local airline_id=$(kcadm get users -r "${REALM}" -q username=airline --fields id 2>/dev/null \
-    | jq -r '.[0].id')
-  kcadm update "users/${airline_id}" -r "${REALM}" \
-    -s "attributes.claimsRef=[\"${claims_ref}\"]"
-
-  echo
   echo "  Step 2/4: Issuer creates a pre-auth credential offer"
   _run_headless ${OID4VC} login \
     --realm "${REALM}" --user "iss" --password "password"
@@ -66,9 +56,9 @@ do_booking() {
     --target-user "airline" \
     --store-for "alice" \
     --credential-configuration "${scope}" \
+    --claims-ref "${claims_ref}" \
     --type=uri_qr \
-    --pre-auth=true \
-    --tx-code
+    --pre-auth=true
 
   echo
   echo "  Step 3/4: Alice fetches the offer"
@@ -103,16 +93,6 @@ do_checkin() {
   open "http://${EXTERNAL_IP}:30200/passes.html"
 
   echo
-  echo "  ###########################################################################"
-  echo "  # HACK: Set checkin.claimsRef user attribute to '${claims_ref}' so the GraphQL"
-  echo "  # claim mapper can resolve boarding pass data (graphqlVariableMapping: id=claimsRef)."
-  echo "  ###########################################################################"
-  local checkin_id=$(kcadm get users -r "${REALM}" -q username=checkin --fields id 2>/dev/null \
-    | jq -r '.[0].id')
-  kcadm update "users/${checkin_id}" -r "${REALM}" \
-    -s "attributes.claimsRef=[\"${claims_ref}\"]"
-
-  echo
   echo "  Step 2/4: Issuer creates a pre-auth boarding pass offer"
   _run_headless ${OID4VC} login \
     --realm "${REALM}" --user "iss" --password "password"
@@ -121,9 +101,9 @@ do_checkin() {
     --target-user "checkin" \
     --store-for "alice" \
     --credential-configuration "${scope}" \
+    --claims-ref "${claims_ref}" \
     --type=uri_qr \
-    --pre-auth=true \
-    --tx-code
+    --pre-auth=true
 
   echo
   echo "  Step 3/4: Alice fetches the offer"

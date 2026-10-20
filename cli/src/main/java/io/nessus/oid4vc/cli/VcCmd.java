@@ -301,7 +301,7 @@ class VcCmd implements Runnable {
             return matched;
         }
 
-        private String filterDisclosures(String sdJwtStr, JsonNode dcqlQuery, String queryId) {
+        String filterDisclosures(String sdJwtStr, JsonNode dcqlQuery, String queryId) {
             var credentials = dcqlQuery.get("credentials");
             Set<String> requestedClaims = Set.of();
             for (var credQuery : credentials) {
@@ -312,7 +312,12 @@ class VcCmd implements Runnable {
                         for (var claim : claims) {
                             var path = claim.get("path");
                             if (path != null && path.isArray() && !path.isEmpty()) {
-                                requestedClaims.add(path.get(path.size() - 1).asText());
+                                // SD-JWT disclosures are always one atomic disclosure per top-level claim
+                                // (Keycloak's SdJwtCredentialBuilder never discloses nested object fields
+                                // individually), so the disclosure name to keep is always the FIRST path
+                                // segment, regardless of how many more segments address a field inside it
+                                // (e.g. ["airline-ticket", "flightNumber"] discloses "airline-ticket" whole).
+                                requestedClaims.add(path.get(0).asText());
                             }
                         }
                     }

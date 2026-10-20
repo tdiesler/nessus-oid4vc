@@ -167,6 +167,8 @@ public class GateRoutes extends RouteBuilder {
         boolean bpSd = bpCreds.isEmpty();
         if (bpSd) bpCreds = vpToken.getCredentials("boarding_pass_sd");
         var bpClaims = bpCreds.getFirst();
+        // The GraphQL claim mapper spreads the boarding pass object's fields into individual top-level
+        // claims (not nested under claim.name; see keycloak/keycloak#53956), directly under credentialSubject.
         var bp = bpSd ? bpClaims : bpClaims.at("/vc/credentialSubject");
 
         var personCreds = vpToken.getCredentials("natural_person_jwt");
