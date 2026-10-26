@@ -80,7 +80,7 @@ class AirportDemoTest {
         var booking = JSON.writeValueAsString(Map.of(
                 "flightNumber", "BA123",
                 "route", "LHR-JFK",
-                "departureDateTime", "2026-10-15T08:30:00Z",
+                "departureDateTime", "2026-11-15T08:30:00Z",
                 "passengerName", "Alice Wonderland"));
 
         var req = HttpRequest.newBuilder()

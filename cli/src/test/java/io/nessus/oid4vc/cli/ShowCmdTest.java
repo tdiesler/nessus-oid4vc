@@ -19,6 +19,18 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+/**
+ * Tests for 'oid4vc show' commands.
+ * <p>
+ * Admin commands (showRealm, showClient, showScope, showUser, showUserByName) require Keycloak admin
+ * credentials and will skip if not logged in.
+ * <p>
+ * To run admin tests:
+ * <pre>
+ *   make keycloak-login && mvn test -Dtest=ShowCmdTest
+ * </pre>
+ * Run immediately after login - admin tokens expire after a few minutes.
+ */
 class ShowCmdTest extends AbstractCmdTest {
 
     @BeforeAll
@@ -158,7 +170,7 @@ class ShowCmdTest extends AbstractCmdTest {
     @Test
     void showRealm() throws Exception {
         assumeTrue(realmAvailable, "Keycloak realm not available");
-        assertTrue(adminLoggedIn(), "Admin login failed");
+        assumeTrue(adminLoggedIn(), "Admin not logged in");
 
         var result = cli("show", "realm");
         assertEquals(0, result.exitCode(), result.stderr());
@@ -168,7 +180,7 @@ class ShowCmdTest extends AbstractCmdTest {
     @Test
     void showClient() throws Exception {
         assumeTrue(realmAvailable, "Keycloak realm not available");
-        assertTrue(adminLoggedIn(), "Admin login failed");
+        assumeTrue(adminLoggedIn(), "Admin not logged in");
 
         var result = cli("show", "client");
         assertEquals(0, result.exitCode(), result.stderr());
@@ -178,7 +190,7 @@ class ShowCmdTest extends AbstractCmdTest {
     @Test
     void showScope() throws Exception {
         assumeTrue(realmAvailable, "Keycloak realm not available");
-        assertTrue(adminLoggedIn(), "Admin login failed");
+        assumeTrue(adminLoggedIn(), "Admin not logged in");
 
         var result = cli("show", "scope", "--name", "oid4vc_natural_person_jwt");
         assertEquals(0, result.exitCode(), result.stderr());
@@ -188,7 +200,7 @@ class ShowCmdTest extends AbstractCmdTest {
     @Test
     void showUser() throws Exception {
         assumeTrue(realmAvailable, "Keycloak realm not available");
-        assertTrue(adminLoggedIn(), "Admin login failed");
+        assumeTrue(adminLoggedIn(), "Admin not logged in");
 
         var result = cli("show", "user");
         assertEquals(0, result.exitCode(), result.stderr());
@@ -198,7 +210,7 @@ class ShowCmdTest extends AbstractCmdTest {
     @Test
     void showUserByName() throws Exception {
         assumeTrue(realmAvailable, "Keycloak realm not available");
-        assertTrue(adminLoggedIn(), "Admin login failed");
+        assumeTrue(adminLoggedIn(), "Admin not logged in");
 
         var result = cli("show", "user", "--user", "iss");
         assertEquals(0, result.exitCode(), result.stderr());

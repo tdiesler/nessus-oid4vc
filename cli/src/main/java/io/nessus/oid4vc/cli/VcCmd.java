@@ -197,9 +197,9 @@ class VcCmd implements Runnable {
                 var responseUri = authJson.get("response_uri").asText();
 
                 if (verbose) {
-                    System.out.println("DCQL query: " + MAPPER.writeValueAsString(dcqlQuery));
-                    System.out.println("Nonce: " + nonce);
-                    System.out.println("Response URI: " + responseUri);
+                    System.err.println("DCQL query: " + MAPPER.writeValueAsString(dcqlQuery));
+                    System.err.println("Nonce: " + nonce);
+                    System.err.println("Response URI: " + responseUri);
                 }
 
                 if (conn.credentials == null || conn.credentials.isEmpty()) {

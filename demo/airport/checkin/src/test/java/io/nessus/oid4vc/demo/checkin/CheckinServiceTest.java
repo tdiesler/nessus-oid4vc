@@ -102,7 +102,7 @@ class CheckinServiceTest {
                         "ticketRef", "A3F2",
                         "flightNumber", "BA123",
                         "passengerName", "Alice Wonderland",
-                        "departureDateTime", "2026-10-15T08:30:00Z",
+                        "departureDateTime", "2026-11-15T08:30:00Z",
                         "route", "LHR-JFK",
                         "id", "alice"
                 )
@@ -140,7 +140,7 @@ class CheckinServiceTest {
         assertNotNull(bp.get("boardingRef").asText());
         assertEquals("Alice Wonderland", bp.get("passengerName").asText());
         assertEquals("BA123", bp.get("flightNumber").asText());
-        assertEquals("2026-10-15T08:30:00Z", bp.get("departureDateTime").asText());
+        assertEquals("2026-11-15T08:30:00Z", bp.get("departureDateTime").asText());
         assertNotNull(bp.get("seat").asText());
         assertNotNull(bp.get("boardingGroup").asText());
         assertNotNull(bp.get("gate").asText());

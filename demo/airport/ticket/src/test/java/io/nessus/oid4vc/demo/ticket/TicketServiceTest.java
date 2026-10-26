@@ -43,7 +43,7 @@ class TicketServiceTest {
     void createAndQueryBooking() throws Exception {
         var booking = """
             {"flightNumber":"BA123","route":"LHR-JFK",
-             "departureDateTime":"2026-10-15T08:30:00Z",
+             "departureDateTime":"2026-11-15T08:30:00Z",
              "passengerName":"Alice Wonderland"}""";
 
         var createReq = HttpRequest.newBuilder()
@@ -73,7 +73,7 @@ class TicketServiceTest {
         var data = JSON.readTree(queryResp.body()).get("data").get("booking");
         assertEquals("BA123", data.get("flightNumber").asText());
         assertEquals("LHR-JFK", data.get("route").asText());
-        assertEquals("2026-10-15T08:30:00Z", data.get("departureDateTime").asText());
+        assertEquals("2026-11-15T08:30:00Z", data.get("departureDateTime").asText());
         assertEquals("Alice Wonderland", data.get("passengerName").asText());
     }
 

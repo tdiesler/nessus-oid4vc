@@ -41,7 +41,7 @@ class DemoCmd implements Runnable {
         @Option(names = "--route", required = true, description = "Route (e.g. LHR-JFK)")
         String route;
 
-        @Option(names = "--departure", required = true, description = "Departure date/time (ISO-8601, e.g. 2026-10-15T08:30:00Z)")
+        @Option(names = "--departure", required = true, description = "Departure date/time (ISO-8601, e.g. 2026-11-15T08:30:00Z)")
         String departure;
 
         @Override

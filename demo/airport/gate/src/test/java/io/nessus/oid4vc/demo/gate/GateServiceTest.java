@@ -99,7 +99,7 @@ class GateServiceTest {
                         "flightNumber", "BA123",
                         "seat", "14A",
                         "boardingGroup", "B",
-                        "departureDateTime", "2026-10-15T08:30:00Z",
+                        "departureDateTime", "2026-11-15T08:30:00Z",
                         "gate", "G12",
                         "id", "alice"
                 )
